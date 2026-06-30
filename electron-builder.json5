@@ -18,6 +18,7 @@
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"
   },
   "win": {
+    "icon": "public/logo.ico",
     "target": [
       {
         "target": "nsis",
@@ -35,6 +36,7 @@
     "deleteAppDataOnUninstall": false
   },
   "linux": {
+    "icon": "public/logo.png",
     "target": [
       "AppImage"
     ],
