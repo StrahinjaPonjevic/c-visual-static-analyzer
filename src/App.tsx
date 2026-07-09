@@ -1,7 +1,14 @@
 import './App.css'
 
 function App() {
-  return <h1>C Visual Static Analyzer</h1>
+  return (
+    <div className="app-shell">
+      <header className="toolbar">{}</header>
+      <main className="editor-area">{}</main>
+      <aside className="ai-panel">{}</aside>
+      <footer className="output-panel">{}</footer>
+    </div>
+  )
 }
 
 export default App
