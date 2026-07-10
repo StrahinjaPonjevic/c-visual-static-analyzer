@@ -8,5 +8,10 @@ contextBridge.exposeInMainWorld('api', {
         const handler = () => callback()
         ipcRenderer.on('menu:open-file', handler)
         return () => ipcRenderer.removeListener('menu:open-file', handler)
+    },
+    onMenuSave: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('menu:save-file', handler)
+        return () => ipcRenderer.removeListener('menu:save-file', handler)
     }
 })

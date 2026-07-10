@@ -41,6 +41,11 @@ function buildMenu(win: BrowserWindow) {
           accelerator: 'CmdOrCtrl+O',
           click: () => win.webContents.send('menu:open-file'),
         },
+        {
+          label: 'Save',
+          accelerator: 'CmdOrCtrl+S',
+          click: () => win.webContents.send('menu:save-file'),
+        },
         { type: 'separator' },
         {
           label: 'Exit',
