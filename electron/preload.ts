@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('api', {
         const handler = () => callback()
         ipcRenderer.on('menu:save-file', handler)
         return () => ipcRenderer.removeListener('menu:save-file', handler)
-    }
+    },
+    saveAsFile: (content: string) => ipcRenderer.invoke('file:save-as', content),
 })

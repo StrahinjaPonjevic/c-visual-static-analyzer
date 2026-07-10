@@ -20,6 +20,11 @@ function App() {
   async function handleSave() {
     if(currentFilePath) {
       await window.api.saveFile(currentFilePath, code)
+    } else {
+      const newPath = await window.api.saveAsFile(code)
+      if(newPath) {
+        setCurrentFilePath(newPath)
+      }
     }
   }
 
@@ -47,7 +52,9 @@ function App() {
         <Editor value={code} onChange={setCode}/>
       </main>
       <aside className="ai-panel">{}</aside>
-      <footer className="output-panel">{}</footer>
+      <footer className="output-panel">
+        {currentFilePath ? <span>{currentFilePath}</span> : <span>Nijedan fajl nije otvoren</span>}
+      </footer>
     </div>
   )
 }

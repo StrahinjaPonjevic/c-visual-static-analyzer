@@ -31,6 +31,15 @@ ipcMain.handle('file:save', async (_event, filePath: string, content: string) =>
   return true
 })
 
+ipcMain.handle('file:save-as', async (_event, content: string) => {
+  const result = await dialog.showSaveDialog({
+    filters: [{ name: 'C fajlovi', extensions: ['c', 'h'] }],
+  })
+  if (result.canceled) return null
+  await fs.writeFile(result.filePath, content, 'utf-8')
+  return result.filePath
+})
+
 function buildMenu(win: BrowserWindow) {
   const template: any[] = [
     {

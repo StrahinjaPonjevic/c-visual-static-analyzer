@@ -3,8 +3,9 @@
   grid-template-columns: 1fr 260px;
   grid-template-rows: 1fr 160px;
   height: 100vh;
+  min-height: 100vh;
   background-color: aliceblue;
 }
-.editor-area { grid-column: 1; grid-row: 1; background-color: aquamarine; }
+.editor-area { grid-column: 1; grid-row: 1; background-color: aquamarine; overflow: hidden; }
 .ai-panel { grid-column: 2; grid-row: 1 / 3; background-color: azure; }
-.output-panel { grid-column: 1; grid-row: 2; background-color: bisque; }
+.output-panel { grid-column: 1; grid-row: 2; background-color: bisque; padding: 4px 8px; font-size: 12px; font-family: monospace; display: flex; align-items: center; }

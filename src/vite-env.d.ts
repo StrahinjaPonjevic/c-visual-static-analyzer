@@ -5,5 +5,6 @@ interface Window {
         saveFile: (path: string, content: string) => Promise<boolean>
         onMenuOpen: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
+        saveAsFile: (content: string) => Promise<string | null>
     }
 }
