@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -40,8 +40,24 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
   return result.filePath
 })
 
+ipcMain.on('window:minimize', () => {
+  win?.minimize()
+})
+
+ipcMain.on('window:maximize', () => {
+  if (win?.isMaximized()) {
+    win.unmaximize()
+  } else {
+    win?.maximize()
+  }
+})
+
+ipcMain.on('window:close', () => {
+  win?.close()
+})
+
 function buildMenu(win: BrowserWindow) {
-  const template: any[] = [
+  const template: MenuItemConstructorOptions[] = [
     {
       label: 'File',
       submenu: [
@@ -81,12 +97,22 @@ function createWindow() {
 
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, iconName),
+    frame: false,
+    titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
 
   buildMenu(win)
+
+  win.on('maximize', () => {
+    win?.webContents.send('window-state-changed', true)
+  })
+
+  win.on('unmaximize', () => {
+    win?.webContents.send('window-state-changed', false)
+  })
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)

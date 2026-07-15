@@ -15,4 +15,12 @@ contextBridge.exposeInMainWorld('api', {
         return () => ipcRenderer.removeListener('menu:save-file', handler)
     },
     saveAsFile: (content: string) => ipcRenderer.invoke('file:save-as', content),
+    minimizeWindow: () => ipcRenderer.send('window:minimize'),
+    maximizeWindow: () => ipcRenderer.send('window:maximize'),
+    closeWindow: () => ipcRenderer.send('window:close'),
+    onWindowStateChanged: (callback: (maximized: boolean) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized)
+        ipcRenderer.on('window-state-changed', handler)
+        return () => ipcRenderer.removeListener('window-state-changed', handler)
+    },
 })
