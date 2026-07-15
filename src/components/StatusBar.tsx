@@ -4,9 +4,10 @@ interface StatusBarProps {
   filePath: string | null
   line?: number
   column?: number
+  language?: string
 }
 
-export function StatusBar({ filePath, line = 1, column = 1 }: StatusBarProps) {
+export function StatusBar({ filePath, line = 1, column = 1, language = "C" }: StatusBarProps) {
   const fileName = filePath ? filePath.split(/[/\\]/).pop() : null
 
   return (
@@ -26,7 +27,7 @@ export function StatusBar({ filePath, line = 1, column = 1 }: StatusBarProps) {
 
       <div className="flex items-center gap-4">
         <span>Ln {line}, Col {column}</span>
-        <span>C</span>
+        <span>{language}</span>
         <span>UTF-8</span>
       </div>
     </div>

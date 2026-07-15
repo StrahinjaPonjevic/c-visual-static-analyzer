@@ -17,6 +17,24 @@ function App() {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [showSidePanel, setShowSidePanel] = useState(true)
   const [activeSideTab, setActiveSideTab] = useState<"ai" | "analysis">("ai")
+  const [cursorLine, setCursorLine] = useState(1)
+  const [cursorColumn, setCursorColumn] = useState(1)
+
+  function getLanguageFromPath(filePath: string | null): string {
+    if (!filePath) return "C"
+    const ext = filePath.split('.').pop()?.toLowerCase()
+    switch (ext) {
+      case 'c': case 'h': return 'C'
+      case 'cpp': case 'cc': case 'cxx': case 'hpp': return 'C++'
+      case 'py': return 'Python'
+      case 'js': case 'jsx': case 'ts': case 'tsx': return 'JavaScript'
+      case 'json': return 'JSON'
+      case 'md': return 'Markdown'
+      default: return 'Plain Text'
+    }
+  }
+
+  const language = getLanguageFromPath(currentFilePath)
 
   useEffect(() => {
     const cleanup = window.api.onMenuOpen(async () => {
@@ -107,7 +125,14 @@ function App() {
           <ResizablePanel defaultSize={showSidePanel ? "72%" : "100%"} minSize={300}>
             <ResizablePanelGroup orientation="vertical">
               <ResizablePanel defaultSize="70%" minSize={200}>
-                <Editor value={code} onChange={setCode} />
+                <Editor
+                  value={code}
+                  onChange={setCode}
+                  onCursorChange={(line, column) => {
+                    setCursorLine(line)
+                    setCursorColumn(column)
+                  }}
+                />
               </ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize="30%" minSize={100}>
@@ -122,7 +147,6 @@ function App() {
               <ResizablePanel defaultSize="28%" minSize={200}>
                 <SidePanel
                   activeTab={activeSideTab}
-                  onTabChange={setActiveSideTab}
                   code={code}
                 />
               </ResizablePanel>
@@ -130,7 +154,7 @@ function App() {
           )}
         </ResizablePanelGroup>
 
-        <StatusBar filePath={currentFilePath} />
+        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} />
       </div>
     </TooltipProvider>
   )
