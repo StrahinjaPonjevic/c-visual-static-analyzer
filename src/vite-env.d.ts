@@ -21,6 +21,8 @@ interface Window {
         minimizeWindow: () => void
         maximizeWindow: () => void
         closeWindow: () => void
+        forceClose: () => void
+        onConfirmClose: (callback: () => void) => () => void
         onWindowStateChanged: (callback: (maximized: boolean) => void) => () => void
     }
 }

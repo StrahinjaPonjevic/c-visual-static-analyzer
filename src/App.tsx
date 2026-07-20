@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -11,6 +11,7 @@ import { TitleBar } from "@/components/TitleBar"
 import { SidePanel } from "@/components/SidePanel"
 import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel } from "@/components/OutputPanel"
+import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
 
 function App() {
   const [code, setCode] = useState("// Otvorite C fajl da biste poceli\n")
@@ -19,6 +20,11 @@ function App() {
   const [activeSideTab, setActiveSideTab] = useState<"ai" | "analysis">("ai")
   const [cursorLine, setCursorLine] = useState(1)
   const [cursorColumn, setCursorColumn] = useState(1)
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
+  const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
+  const savedCodeRef = useRef(code)
+
+  const isDirty = code !== savedCodeRef.current
 
   function getLanguageFromPath(filePath: string | null): string {
     if (!filePath) return "C"
@@ -36,17 +42,6 @@ function App() {
 
   const language = getLanguageFromPath(currentFilePath)
 
-  useEffect(() => {
-    const cleanup = window.api.onMenuOpen(async () => {
-      const result = await window.api.openFile()
-      if (result) {
-        setCode(result.content)
-        setCurrentFilePath(result.filePath)
-      }
-    })
-    return cleanup
-  }, [])
-
   const handleSave = useCallback(async () => {
     if (currentFilePath) {
       await window.api.saveFile(currentFilePath, code)
@@ -56,20 +51,68 @@ function App() {
         setCurrentFilePath(newPath)
       }
     }
+    savedCodeRef.current = code
   }, [currentFilePath, code])
 
   const handleNew = useCallback(() => {
-    setCode("")
-    setCurrentFilePath(null)
-  }, [])
+    if (isDirty) {
+      setShowUnsavedDialog(true)
+      setUnsavedAction({
+        resolve: (action) => {
+          if (action === 'save') {
+            handleSave().then(() => {
+              setCode("")
+              setCurrentFilePath(null)
+              savedCodeRef.current = ""
+            })
+          } else if (action === 'discard') {
+            setCode("")
+              setCurrentFilePath(null)
+              savedCodeRef.current = ""
+          }
+        }
+      })
+    } else {
+      setCode("")
+      setCurrentFilePath(null)
+      savedCodeRef.current = ""
+    }
+  }, [isDirty, handleSave])
 
   const handleOpen = useCallback(async () => {
-    const result = await window.api.openFile()
-    if (result) {
-      setCode(result.content)
-      setCurrentFilePath(result.filePath)
+    if (isDirty) {
+      setShowUnsavedDialog(true)
+      setUnsavedAction({
+        resolve: async (action) => {
+          if (action === 'save') {
+            await handleSave()
+          }
+          if (action !== 'cancel') {
+            const result = await window.api.openFile()
+            if (result) {
+              setCode(result.content)
+              setCurrentFilePath(result.filePath)
+              savedCodeRef.current = result.content
+            }
+          }
+        }
+      })
+    } else {
+      const result = await window.api.openFile()
+      if (result) {
+        setCode(result.content)
+        setCurrentFilePath(result.filePath)
+        savedCodeRef.current = result.content
+      }
     }
-  }, [])
+  }, [isDirty, handleSave])
+
+  useEffect(() => {
+    const cleanup = window.api.onMenuOpen(() => {
+      handleOpen()
+    })
+    return cleanup
+  }, [handleOpen])
 
   const handleToggleAI = useCallback(() => {
     if (showSidePanel && activeSideTab === "ai") {
@@ -107,10 +150,46 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [handleSave])
 
+  const handleClose = useCallback(() => {
+    if (isDirty) {
+      setShowUnsavedDialog(true)
+      setUnsavedAction({
+        resolve: async (action) => {
+          if (action === 'save') {
+            await handleSave()
+          }
+          if (action !== 'cancel') {
+            window.api.forceClose()
+          }
+        }
+      })
+    } else {
+      window.api.forceClose()
+    }
+  }, [isDirty, handleSave])
+
+  useEffect(() => {
+    const cleanup = window.api.onConfirmClose(() => {
+      handleClose()
+    })
+    return cleanup
+  }, [handleClose])
+
+  const handleUnsavedDialogClose = useCallback((action: 'save' | 'discard' | 'cancel') => {
+    setShowUnsavedDialog(false)
+    const savedAction = unsavedAction
+    setUnsavedAction(null)
+    savedAction?.resolve(action)
+  }, [unsavedAction])
+
+  const fileName = currentFilePath
+    ? currentFilePath.split(/[/\\]/).pop() ?? null
+    : null
+
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background text-foreground dark">
-        <TitleBar filePath={currentFilePath} />
+        <TitleBar filePath={currentFilePath} onClose={handleClose} isDirty={isDirty} />
         <Toolbar
           onNew={handleNew}
           onOpen={handleOpen}
@@ -155,6 +234,14 @@ function App() {
         </ResizablePanelGroup>
 
         <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} />
+
+        <UnsavedChangesDialog
+          open={showUnsavedDialog}
+          fileName={fileName}
+          onSave={() => handleUnsavedDialogClose('save')}
+          onDiscard={() => handleUnsavedDialogClose('discard')}
+          onCancel={() => handleUnsavedDialogClose('cancel')}
+        />
       </div>
     </TooltipProvider>
   )

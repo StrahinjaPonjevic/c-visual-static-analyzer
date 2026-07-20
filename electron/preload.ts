@@ -19,6 +19,12 @@ contextBridge.exposeInMainWorld('api', {
     minimizeWindow: () => ipcRenderer.send('window:minimize'),
     maximizeWindow: () => ipcRenderer.send('window:maximize'),
     closeWindow: () => ipcRenderer.send('window:close'),
+    forceClose: () => ipcRenderer.send('app:force-close'),
+    onConfirmClose: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('app:confirm-close', handler)
+        return () => ipcRenderer.removeListener('app:confirm-close', handler)
+    },
     onWindowStateChanged: (callback: (maximized: boolean) => void) => {
         const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => callback(maximized)
         ipcRenderer.on('window-state-changed', handler)

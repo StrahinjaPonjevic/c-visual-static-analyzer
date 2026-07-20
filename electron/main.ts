@@ -172,6 +172,10 @@ ipcMain.on('window:close', () => {
   win?.close()
 })
 
+ipcMain.on('app:force-close', () => {
+  win?.destroy()
+})
+
 function buildMenu(win: BrowserWindow) {
   const template: MenuItemConstructorOptions[] = [
     {
@@ -221,6 +225,11 @@ function createWindow() {
   })
 
   buildMenu(win)
+
+  win.on('close', (e) => {
+    e.preventDefault()
+    win?.webContents.send('app:confirm-close')
+  })
 
   win.on('maximize', () => {
     win?.webContents.send('window-state-changed', true)
