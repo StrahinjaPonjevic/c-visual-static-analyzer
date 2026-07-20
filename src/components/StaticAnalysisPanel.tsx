@@ -229,7 +229,23 @@ export function StaticAnalysisPanel({ code }: StaticAnalysisPanelProps) {
               <div>
                 <p className="font-medium text-red-400">Greška pri Cppcheck analizi</p>
                 <p className="text-xs text-muted-foreground mt-1 break-words">
-                  {errorMessage}
+                  {(() => {
+                    const urlMatch = errorMessage.match(/https?:\/\/[^\s]+/)
+                    if (urlMatch) {
+                      const url = urlMatch[0]
+                      return (
+                        <>
+                          {errorMessage.substring(0, urlMatch.index)}
+                          <Button variant="link" asChild className="h-auto p-0 text-xs font-normal inline">
+                            <a href={url} target="_blank" rel="noopener noreferrer">
+                              {url}
+                            </a>
+                          </Button>
+                        </>
+                      )
+                    }
+                    return errorMessage
+                  })()}
                 </p>
               </div>
             </div>

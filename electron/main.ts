@@ -124,9 +124,12 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
       stdout = result.stdout || ''
       stderr = result.stderr || ''
     } catch (err) {
-      const execErr = err as { stdout?: string; stderr?: string; message: string }
+      const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string }
       stdout = execErr.stdout || ''
       stderr = execErr.stderr || ''
+      if (execErr.code === 'ENOENT') {
+        return { issues: [], success: false, error: 'Cppcheck nije instaliran. Preuzmite ga na https://cppcheck.sourceforge.io/' }
+      }
       if (!stdout && !stderr && execErr.message) {
         return { issues: [], success: false, error: execErr.message }
       }
