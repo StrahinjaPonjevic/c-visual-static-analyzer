@@ -1,9 +1,67 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu, MenuItemConstructorOptions } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import os from 'node:os'
 import fs from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+interface CppcheckError {
+  id: string
+  severity: 'error' | 'warning' | 'style' | 'performance' | 'information' | 'portability'
+  message: string
+  line: number
+  column: number
+  cwe?: number
+}
+
+interface CppcheckResult {
+  issues: CppcheckError[]
+  success: boolean
+  error?: string
+}
+
+function parseCppcheckXml(xml: string): CppcheckError[] {
+  const issues: CppcheckError[] = []
+
+  const errorRegex = /<error\s+id="([^"]*)"\s+severity="([^"]*)"\s+msg="([^"]*)"(?:[^>]*)>([\s\S]*?)<\/error>/g
+  let match: RegExpExecArray | null
+
+  while ((match = errorRegex.exec(xml)) !== null) {
+    const id = match[1]
+    const severity = match[2] as CppcheckError['severity']
+    const message = match[3]
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+
+    if (id === 'missingIncludeSystem' || id === 'checkersReport') continue
+
+    const innerContent = match[4]
+    const locationMatch = innerContent.match(/<location\s+file="([^"]*)"\s+line="(\d+)"(?:\s+column="(\d+)")?/)
+    if (locationMatch) {
+      const line = parseInt(locationMatch[2], 10) || 0
+      const column = parseInt(locationMatch[3] || '0', 10) || 0
+      const cweMatch = match[0].match(/cwe="(\d+)"/)
+      issues.push({
+        id,
+        severity,
+        message,
+        line,
+        column,
+        cwe: cweMatch ? parseInt(cweMatch[1], 10) : undefined,
+      })
+    }
+  }
+
+  return issues
+}
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 
@@ -38,6 +96,61 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
   if (result.canceled) return null
   await fs.writeFile(result.filePath, content, 'utf-8')
   return result.filePath
+})
+
+ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<CppcheckResult> => {
+  let tempFile: string | null = null
+  try {
+    const tempDir = os.tmpdir()
+    tempFile = path.join(tempDir, `cppcheck_${Date.now()}.c`)
+    await fs.writeFile(tempFile, code, 'utf-8')
+
+    const cppcheckExe = process.platform === 'win32' ? 'cppcheck.exe' : 'cppcheck'
+
+    let stdout: string
+    let stderr: string
+    try {
+      const result = await execFileAsync(cppcheckExe, [
+        '--enable=all',
+        '--inline-suppr',
+        '--std=c11',
+        '--xml-version=2',
+        '-q',
+        tempFile,
+      ], {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000,
+      })
+      stdout = result.stdout || ''
+      stderr = result.stderr || ''
+    } catch (err) {
+      const execErr = err as { stdout?: string; stderr?: string; message: string }
+      stdout = execErr.stdout || ''
+      stderr = execErr.stderr || ''
+      if (!stdout && !stderr && execErr.message) {
+        return { issues: [], success: false, error: execErr.message }
+      }
+    }
+
+    const xmlOutput = stderr || stdout
+    const issues = parseCppcheckXml(xmlOutput)
+
+    return { issues, success: true }
+  } catch (err) {
+    return {
+      issues: [],
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  } finally {
+    if (tempFile) {
+      try {
+        await fs.unlink(tempFile)
+      } catch {
+        // ignore
+      }
+    }
+  }
 })
 
 ipcMain.on('window:minimize', () => {

@@ -6,6 +6,18 @@ interface Window {
         onMenuOpen: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
         saveAsFile: (content: string) => Promise<string | null>
+        analyzeCode: (code: string) => Promise<{
+            issues: {
+                id: string
+                severity: 'error' | 'warning' | 'style' | 'performance' | 'information' | 'portability'
+                message: string
+                line: number
+                column: number
+                cwe?: number
+            }[]
+            success: boolean
+            error?: string
+        }>
         minimizeWindow: () => void
         maximizeWindow: () => void
         closeWindow: () => void

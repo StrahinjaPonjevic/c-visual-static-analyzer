@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
         return () => ipcRenderer.removeListener('menu:save-file', handler)
     },
     saveAsFile: (content: string) => ipcRenderer.invoke('file:save-as', content),
+    analyzeCode: (code: string) => ipcRenderer.invoke('cppcheck:analyze', code),
     minimizeWindow: () => ipcRenderer.send('window:minimize'),
     maximizeWindow: () => ipcRenderer.send('window:maximize'),
     closeWindow: () => ipcRenderer.send('window:close'),
