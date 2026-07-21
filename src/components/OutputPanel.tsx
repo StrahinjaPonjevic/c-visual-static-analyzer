@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react"
-import { Send } from "lucide-react"
+import { Send, Terminal, Trash2 } from "lucide-react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -15,12 +15,14 @@ interface OutputPanelProps {
   terminalOutput: TerminalLine[]
   isRunning: boolean
   onSendStdin: (text: string) => void
+  onClear: () => void
 }
 
 export function OutputPanel({
   terminalOutput,
   isRunning,
   onSendStdin,
+  onClear,
 }: OutputPanelProps) {
   const [stdinInput, setStdinInput] = useState("")
   const terminalEndRef = useRef<HTMLDivElement>(null)
@@ -46,6 +48,19 @@ export function OutputPanel({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex h-7 items-center justify-between bg-background border-b px-3 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">Terminal</span>
+        </div>
+        <button
+          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30"
+          onClick={onClear}
+          disabled={terminalOutput.length === 0}
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
       <ScrollArea className="flex-1">
         <div className="p-3 font-mono text-xs leading-relaxed">
           {terminalOutput.length === 0 ? (

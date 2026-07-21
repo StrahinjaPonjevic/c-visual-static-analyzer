@@ -253,6 +253,8 @@ function App() {
     }])
   }, [])
 
+  const handleClearTerminal = useCallback(() => setTerminalOutput([]), [])
+
   const handleSendStdin = useCallback((text: string) => {
     window.api.sendStdin(text)
     setTerminalOutput(prev => [...prev, {
@@ -359,6 +361,7 @@ function App() {
                   terminalOutput={terminalOutput}
                   isRunning={isRunning}
                   onSendStdin={handleSendStdin}
+                  onClear={handleClearTerminal}
                 />
               </ResizablePanel>
             </ResizablePanelGroup>
