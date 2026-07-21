@@ -42,7 +42,8 @@ interface Window {
         onConfirmClose: (callback: () => void) => () => void
         onWindowStateChanged: (callback: (maximized: boolean) => void) => () => void
 
-        // GCC compile & run
+        // GCC check, compile & run
+        checkGcc: () => Promise<{ detected: boolean; version?: string }>
         compileCode: (code: string) => Promise<GccResult>
         runProgram: (exePath: string) => Promise<{ success: boolean; error?: string }>
         sendStdin: (data: string) => Promise<{ success: boolean; error?: string }>

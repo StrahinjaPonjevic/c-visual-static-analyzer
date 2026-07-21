@@ -156,6 +156,20 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
   }
 })
 
+// ---- GCC detection ----
+
+ipcMain.handle('gcc:check', async (): Promise<{ detected: boolean; version?: string }> => {
+  const gccExe = process.platform === 'win32' ? 'gcc.exe' : 'gcc'
+  try {
+    const { stdout } = await execFileAsync(gccExe, ['--version'], { timeout: 5000 })
+    const firstLine = stdout.trim().split('\n')[0]
+    const version = firstLine || undefined
+    return { detected: true, version }
+  } catch {
+    return { detected: false }
+  }
+})
+
 // ---- GCC compilation ----
 
 interface GccError {

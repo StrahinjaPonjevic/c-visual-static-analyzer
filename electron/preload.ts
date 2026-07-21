@@ -47,7 +47,8 @@ contextBridge.exposeInMainWorld('api', {
         return () => ipcRenderer.removeListener('window-state-changed', handler)
     },
 
-    // GCC compile & run
+    // GCC check, compile & run
+    checkGcc: () => ipcRenderer.invoke('gcc:check') as Promise<{ detected: boolean; version?: string }>,
     compileCode: (code: string) => ipcRenderer.invoke('gcc:compile', code) as Promise<GccResult>,
     runProgram: (exePath: string) => ipcRenderer.invoke('program:run', exePath) as Promise<{ success: boolean; error?: string }>,
     sendStdin: (data: string) => ipcRenderer.invoke('program:stdin', data) as Promise<{ success: boolean; error?: string }>,

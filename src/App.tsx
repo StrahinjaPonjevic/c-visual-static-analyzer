@@ -26,6 +26,17 @@ function App() {
 
   const isDirty = code !== savedCodeRef.current
 
+  // ---- GCC detection ----
+  const [gccDetected, setGccDetected] = useState<boolean | undefined>(undefined)
+  const [gccVersion, setGccVersion] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    window.api.checkGcc().then(result => {
+      setGccDetected(result.detected)
+      setGccVersion(result.version)
+    })
+  }, [])
+
   // ---- GCC compile & run state ----
   const [isCompiling, setIsCompiling] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
@@ -380,7 +391,7 @@ function App() {
           )}
         </ResizablePanelGroup>
 
-        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} />
+        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} gccDetected={gccDetected} gccVersion={gccVersion} />
 
         <UnsavedChangesDialog
           open={showUnsavedDialog}
