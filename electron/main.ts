@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -153,6 +153,200 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
         // ignore
       }
     }
+  }
+})
+
+// ---- GCC compilation ----
+
+interface GccError {
+  line: number
+  column: number
+  type: 'error' | 'warning'
+  message: string
+}
+
+const gccErrorRegex = /^([^:]+):(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
+
+function parseGccErrors(stderr: string): GccError[] {
+  const errors: GccError[] = []
+  let match: RegExpExecArray | null
+  while ((match = gccErrorRegex.exec(stderr)) !== null) {
+    errors.push({
+      line: parseInt(match[2], 10),
+      column: parseInt(match[3], 10),
+      type: match[4] as 'error' | 'warning',
+      message: match[5],
+    })
+  }
+  return errors
+}
+
+function injectUnbuffer(code: string): string {
+  const hasStdioH = /#include\s*<stdio\.h>/.test(code)
+  const preamble = hasStdioH ? '' : '#include <stdio.h>\n'
+
+  const mainRegex = /(int\s+)?main\s*\([\s\S]*?\)\s*\{/
+  const match = code.match(mainRegex)
+  if (!match) return preamble + code
+
+  const braceIndex = match.index! + match[0].length
+  const before = code.slice(0, braceIndex)
+  const after = code.slice(braceIndex)
+  return preamble + before + '\n  setvbuf(stdout, NULL, _IONBF, 0);\n  setvbuf(stderr, NULL, _IONBF, 0);\n' + after
+}
+
+ipcMain.handle('gcc:compile', async (_event, code: string) => {
+  const tempDir = os.tmpdir()
+  const timestamp = Date.now()
+  const cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
+  const exePath = path.join(tempDir, process.platform === 'win32' ? `gcc_${timestamp}.exe` : `gcc_${timestamp}`)
+
+  try {
+    const injectedCode = injectUnbuffer(code)
+    await fs.writeFile(cFilePath, injectedCode, 'utf-8')
+
+    const gccExe = process.platform === 'win32' ? 'gcc.exe' : 'gcc'
+
+    try {
+      const result = await execFileAsync(gccExe, [
+        '-std=c11', '-Wall', '-Wextra',
+        '-o', exePath,
+        cFilePath,
+      ], {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000,
+      })
+
+      return {
+        success: true,
+        exePath,
+        errors: [] as GccError[],
+        stdout: result.stdout || '',
+        stderr: result.stderr || '',
+      }
+    } catch (err) {
+      const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string }
+
+      if (execErr.code === 'ENOENT') {
+        return {
+          success: false,
+          error: 'GCC nije instaliran. Instalirajte MinGW-GCC (Windows) ili gcc (Linux).',
+          errors: [] as GccError[],
+          stdout: '', stderr: '',
+        }
+      }
+
+      const stderr = execErr.stderr || ''
+      const stdout = execErr.stdout || ''
+      const errors = parseGccErrors(stderr)
+
+      return {
+        success: errors.filter(e => e.type === 'error').length === 0,
+        errors,
+        stdout,
+        stderr,
+        exePath: errors.filter(e => e.type === 'error').length === 0 ? exePath : undefined,
+      }
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      errors: [],
+      stdout: '', stderr: '',
+    }
+  } finally {
+    try { await fs.unlink(cFilePath) } catch { /* ignore */ }
+  }
+})
+
+// ---- Program run (interactive via pipe) ----
+
+let runningProcess: import('node:child_process').ChildProcess | null = null
+
+ipcMain.handle('program:run', async (_event, exePath: string) => {
+  if (runningProcess) {
+    return { success: false, error: 'Program je već pokrenut' }
+  }
+
+  try {
+    await fs.access(exePath, fs.constants.X_OK)
+  } catch {
+    try {
+      await fs.access(exePath, fs.constants.R_OK)
+    } catch {
+      return { success: false, error: 'Izvršni fajl nije pronađen' }
+    }
+  }
+
+  runningProcess = spawn(exePath, [], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+    cwd: os.tmpdir(),
+  })
+
+  runningProcess.on('error', (err) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('program:error', err.message)
+    }
+    runningProcess = null
+  })
+
+  runningProcess.stdout?.on('data', (chunk: Buffer) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('program:stdout', chunk.toString())
+    }
+  })
+
+  runningProcess.stderr?.on('data', (chunk: Buffer) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('program:stderr', chunk.toString())
+    }
+  })
+
+  runningProcess.on('close', (code) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('program:exit', code)
+    }
+    runningProcess = null
+  })
+
+  return { success: true }
+})
+
+ipcMain.handle('program:stdin', (_event, data: string) => {
+  if (!runningProcess || !runningProcess.stdin) {
+    return { success: false, error: 'Program nije pokrenut' }
+  }
+  runningProcess.stdin.write(data)
+  return { success: true }
+})
+
+ipcMain.handle('program:kill', async () => {
+  if (!runningProcess) {
+    return { success: false, error: 'Nema aktivnog procesa' }
+  }
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
+  } else {
+    runningProcess.kill('SIGTERM')
+  }
+  runningProcess = null
+  return { success: true }
+})
+
+// Clean up running process on app quit
+app.on('before-quit', () => {
+  if (runningProcess) {
+    if (process.platform === 'win32' && runningProcess.pid) {
+      spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
+    } else {
+      runningProcess.kill('SIGTERM')
+    }
+    runningProcess = null
   }
 })
 

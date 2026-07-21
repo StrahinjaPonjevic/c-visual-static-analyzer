@@ -10,7 +10,7 @@ import { Toolbar } from "@/components/Toolbar"
 import { TitleBar } from "@/components/TitleBar"
 import { SidePanel } from "@/components/SidePanel"
 import { StatusBar } from "@/components/StatusBar"
-import { OutputPanel } from "@/components/OutputPanel"
+import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
 
 function App() {
@@ -25,6 +25,17 @@ function App() {
   const savedCodeRef = useRef(code)
 
   const isDirty = code !== savedCodeRef.current
+
+  // ---- GCC compile & run state ----
+  const [isCompiling, setIsCompiling] = useState(false)
+  const [isRunning, setIsRunning] = useState(false)
+  const [terminalOutput, setTerminalOutput] = useState<TerminalLine[]>([])
+  const [compileErrors, setCompileErrors] = useState<GccError[]>([])
+  const [gccStdout, setGccStdout] = useState("")
+  const [gccStderr, setGccStderr] = useState("")
+  const [activeOutputTab, setActiveOutputTab] = useState("terminal")
+  const terminalIdRef = useRef(1)
+  const exePathRef = useRef<string | null>(null)
 
   function getLanguageFromPath(filePath: string | null): string {
     if (!filePath) return "C"
@@ -175,6 +186,144 @@ function App() {
     return cleanup
   }, [handleClose])
 
+  // ---- GCC compile & run handlers ----
+
+  const handleRun = useCallback(async () => {
+    if (!code.trim()) return
+
+    setIsCompiling(true)
+    setTerminalOutput([])
+    setCompileErrors([])
+    setGccStdout("")
+    setGccStderr("")
+    setActiveOutputTab("terminal")
+
+    const id = terminalIdRef.current
+    terminalIdRef.current += 1
+    setTerminalOutput(prev => [...prev, { id, type: "system", text: "$ Kompajliram..." }])
+
+    const result = await window.api.compileCode(code)
+
+    setGccStdout(result.stdout)
+    setGccStderr(result.stderr)
+
+    if (result.error) {
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `Greška: ${result.error}`,
+      }])
+      setIsCompiling(false)
+      return
+    }
+
+    if (result.errors.length > 0) {
+      setCompileErrors(result.errors)
+      setActiveOutputTab("problems")
+    }
+
+    if (!result.success) {
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `Kompajliranje neuspešno (${result.errors.filter(e => e.type === "error").length} grešaka)`,
+      }])
+      setIsCompiling(false)
+      return
+    }
+
+    // Kompajliranje uspešno — pokreni program
+    setTerminalOutput(prev => [...prev, {
+      id: terminalIdRef.current++,
+      type: "system",
+      text: "Kompajliranje uspešno. Pokrećem program...\n",
+    }])
+
+    exePathRef.current = result.exePath || null
+
+    const runResult = await window.api.runProgram(result.exePath!)
+    if (!runResult.success) {
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `Greška pri pokretanju: ${runResult.error}`,
+      }])
+      setIsCompiling(false)
+      return
+    }
+
+    setIsRunning(true)
+    setIsCompiling(false)
+  }, [code])
+
+  const handleStop = useCallback(async () => {
+    await window.api.killProgram()
+    setIsRunning(false)
+    setTerminalOutput(prev => [...prev, {
+      id: terminalIdRef.current++,
+      type: "system",
+      text: "Program zaustavljen.\n",
+    }])
+  }, [])
+
+  const handleSendStdin = useCallback((text: string) => {
+    window.api.sendStdin(text)
+    setTerminalOutput(prev => [...prev, {
+      id: terminalIdRef.current++,
+      type: "stdout",
+      text: text,
+    }])
+  }, [])
+
+  // Listen for program output from main process
+  useEffect(() => {
+    const cleanStdout = window.api.onProgramStdout((data: string) => {
+      setTerminalOutput(prev => {
+        if (prev.length === 0) return [{ id: terminalIdRef.current++, type: "stdout", text: data }]
+        const last = prev[prev.length - 1]
+        if (last.type === "stdout") {
+          const updated = [...prev]
+          updated[updated.length - 1] = { ...last, text: last.text + data }
+          return updated
+        }
+        return [...prev, { id: terminalIdRef.current++, type: "stdout", text: data }]
+      })
+    })
+
+    const cleanStderr = window.api.onProgramStderr((data: string) => {
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "stderr",
+        text: data,
+      }])
+    })
+
+    const cleanExit = window.api.onProgramExit((code: number | null) => {
+      setIsRunning(false)
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `\nProgram završen sa izlaznim kodom: ${code ?? "?"}\n`,
+      }])
+    })
+
+    const cleanError = window.api.onProgramError((error: string) => {
+      setIsRunning(false)
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `Greška: ${error}\n`,
+      }])
+    })
+
+    return () => {
+      cleanStdout()
+      cleanStderr()
+      cleanExit()
+      cleanError()
+    }
+  }, [])
+
   const handleUnsavedDialogClose = useCallback((action: 'save' | 'discard' | 'cancel') => {
     setShowUnsavedDialog(false)
     const savedAction = unsavedAction
@@ -198,6 +347,10 @@ function App() {
           activeSideTab={activeSideTab}
           onToggleAI={handleToggleAI}
           onToggleAnalysis={handleToggleAnalysis}
+          onRun={handleRun}
+          onStop={handleStop}
+          isRunning={isRunning}
+          isCompiling={isCompiling}
         />
 
         <ResizablePanelGroup orientation="horizontal" className="flex-1">
@@ -215,7 +368,16 @@ function App() {
               </ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize="30%" minSize={100}>
-                <OutputPanel />
+                <OutputPanel
+                  terminalOutput={terminalOutput}
+                  compileErrors={compileErrors}
+                  gccStdout={gccStdout}
+                  gccStderr={gccStderr}
+                  isRunning={isRunning}
+                  onSendStdin={handleSendStdin}
+                  activeTab={activeOutputTab}
+                  onTabChange={setActiveOutputTab}
+                />
               </ResizablePanel>
             </ResizablePanelGroup>
           </ResizablePanel>

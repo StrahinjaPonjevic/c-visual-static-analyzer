@@ -5,6 +5,9 @@ import {
   Settings,
   Bot,
   BarChart3,
+  Play,
+  Square,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +26,10 @@ interface ToolbarProps {
   activeSideTab: "ai" | "analysis"
   onToggleAI: () => void
   onToggleAnalysis: () => void
+  onRun: () => void
+  onStop: () => void
+  isRunning: boolean
+  isCompiling: boolean
 }
 
 export function Toolbar({
@@ -33,6 +40,10 @@ export function Toolbar({
   activeSideTab,
   onToggleAI,
   onToggleAnalysis,
+  onRun,
+  onStop,
+  isRunning,
+  isCompiling,
 }: ToolbarProps) {
   return (
     <div className="flex h-10 items-center border-b bg-secondary px-2 gap-1">
@@ -77,6 +88,39 @@ export function Toolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Snimi (Ctrl+S)</TooltipContent>
+        </Tooltip>
+      </div>
+
+      <Separator orientation="vertical" className="h-6 mx-1" />
+
+      <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="sm"
+              className={cn(
+                "h-8 gap-1.5 px-3 rounded-lg transition-all duration-150",
+                isRunning && "!bg-destructive !text-destructive-foreground hover:!bg-destructive/90"
+              )}
+              onClick={isRunning ? onStop : onRun}
+              disabled={isCompiling}
+            >
+              {isCompiling ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isRunning ? (
+                <Square className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              <span className="text-xs font-medium">
+                {isCompiling ? "Kompajliranje..." : isRunning ? "Zaustavi" : "Pokreni"}
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {isCompiling ? "Kompajliranje..." : isRunning ? "Zaustavi program" : "Kompajliraj i pokreni"}
+          </TooltipContent>
         </Tooltip>
       </div>
 
