@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import type { CppcheckIssue } from "@/types"
 
 interface CodeMetrics {
   lines: number
@@ -32,17 +33,9 @@ interface CodeMetrics {
   comments: number
 }
 
-interface CppcheckIssue {
-  id: string
-  severity: "error" | "warning" | "style" | "performance" | "information" | "portability"
-  line: number
-  column: number
-  message: string
-  cwe?: number
-}
-
 interface StaticAnalysisPanelProps {
   code: string
+  onIssuesChange?: (issues: CppcheckIssue[]) => void
 }
 
 function computeMetrics(code: string): CodeMetrics {
@@ -98,7 +91,7 @@ function computeMetrics(code: string): CodeMetrics {
   }
 }
 
-export function StaticAnalysisPanel({ code }: StaticAnalysisPanelProps) {
+export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPanelProps) {
   const [metrics, setMetrics] = useState<CodeMetrics>({
     lines: 0,
     totalLines: 0,
@@ -125,18 +118,22 @@ export function StaticAnalysisPanel({ code }: StaticAnalysisPanelProps) {
     try {
       const result = await window.api.analyzeCode(codeToAnalyze)
       if (result.success) {
-        setIssues(result.issues as CppcheckIssue[])
+        const issues = result.issues as CppcheckIssue[]
+        setIssues(issues)
+        onIssuesChange?.(issues)
       } else {
         setErrorMessage(result.error || "Greška pri analizi")
         setIssues([])
+        onIssuesChange?.([])
       }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : "Nepoznata greška")
       setIssues([])
+      onIssuesChange?.([])
     } finally {
       setIsAnalyzing(false)
     }
-  }, [])
+  }, [onIssuesChange])
 
   const analyzeCode = useCallback(() => {
     const computed = computeMetrics(code)

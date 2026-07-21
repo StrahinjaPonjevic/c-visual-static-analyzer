@@ -74,6 +74,24 @@
   }
 }
 
+/* Code marker decorations for Monaco Editor */
+.marker-error {
+  background: rgba(239, 68, 68, 0.12);
+  border-left: 3px solid rgb(239, 68, 68);
+}
+.marker-warning {
+  background: rgba(234, 179, 8, 0.12);
+  border-left: 3px solid rgb(234, 179, 8);
+}
+.marker-info {
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 3px solid rgb(59, 130, 246);
+}
+.marker-good {
+  background: rgba(34, 197, 94, 0.08);
+  border-left: 3px solid rgb(34, 197, 94);
+}
+
 .resize-handle {
   @apply relative flex items-center justify-center;
 }

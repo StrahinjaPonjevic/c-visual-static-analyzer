@@ -12,6 +12,8 @@ import { SidePanel } from "@/components/SidePanel"
 import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
+import type { CodeMarker, CppcheckIssue } from "@/types"
+import { computeMarkers } from "@/analysis/markers"
 
 function App() {
   const [code, setCode] = useState("// Otvorite C fajl da biste poceli\n")
@@ -35,6 +37,19 @@ function App() {
       setGccDetected(result.detected)
       setGccVersion(result.version)
     })
+  }, [])
+
+  // ---- Analysis results & markers ----
+  const [cppcheckIssues, setCppcheckIssues] = useState<CppcheckIssue[]>([])
+  const [gccErrors, setGccErrors] = useState<GccError[]>([])
+  const [markers, setMarkers] = useState<CodeMarker[]>([])
+
+  useEffect(() => {
+    setMarkers(computeMarkers(code, cppcheckIssues, gccErrors))
+  }, [code, cppcheckIssues, gccErrors])
+
+  const handleIssuesChange = useCallback((issues: CppcheckIssue[]) => {
+    setCppcheckIssues(issues)
   }, [])
 
   // ---- GCC compile & run state ----
@@ -200,12 +215,14 @@ function App() {
 
     setIsCompiling(true)
     setTerminalOutput([])
+    setGccErrors([])
 
     const id = terminalIdRef.current
     terminalIdRef.current += 1
     setTerminalOutput(prev => [...prev, { id, type: "system", text: "$ Kompajliram..." }])
 
     const result = await window.api.compileCode(code)
+    setGccErrors(result.errors)
 
     if (result.error) {
       setTerminalOutput(prev => [...prev, {
@@ -371,6 +388,7 @@ function App() {
                     setCursorLine(line)
                     setCursorColumn(column)
                   }}
+                  markers={markers}
                 />
               </ResizablePanel>
               <ResizableHandle withHandle />
@@ -392,6 +410,7 @@ function App() {
                 <SidePanel
                   activeTab={activeSideTab}
                   code={code}
+                  onIssuesChange={handleIssuesChange}
                 />
               </ResizablePanel>
             </>

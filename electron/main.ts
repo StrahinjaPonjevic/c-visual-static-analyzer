@@ -186,10 +186,10 @@ function parseGccErrors(stderr: string): GccError[] {
   let match: RegExpExecArray | null
   while ((match = gccErrorRegex.exec(stderr)) !== null) {
     errors.push({
-      line: parseInt(match[2], 10),
-      column: parseInt(match[3], 10),
-      type: match[4] as 'error' | 'warning',
-      message: match[5],
+      line: parseInt(match[1], 10),
+      column: parseInt(match[2], 10),
+      type: match[3] as 'error' | 'warning',
+      message: match[4],
     })
   }
   return errors

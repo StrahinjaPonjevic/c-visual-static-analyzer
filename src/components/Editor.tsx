@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import MonacoEditor from '@monaco-editor/react'
+import type { CodeMarker } from '@/types'
 
 type Props = {
     value: string
     onChange: (value: string) => void
     onCursorChange?: (line: number, column: number) => void
+    markers?: CodeMarker[]
 }
 
-export default function Editor({ value, onChange, onCursorChange }: Props) {
+export default function Editor({ value, onChange, onCursorChange, markers }: Props) {
     const [editorInstance, setEditorInstance] = useState<unknown>(null)
+    const decorationIdsRef = useRef<string[]>([])
 
     const handleEditorMount = (monacoEditor: unknown) => {
         setEditorInstance(monacoEditor)
@@ -23,6 +26,28 @@ export default function Editor({ value, onChange, onCursorChange }: Props) {
 
         return () => disposable.dispose()
     }, [editorInstance, onCursorChange])
+
+    useEffect(() => {
+        if (!editorInstance) return
+
+        const editor = editorInstance as { deltaDecorations: (old: string[], newDecorations: { range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }; options: { isWholeLine: boolean; className: string; hoverMessage?: { value: string } } }[]) => string[] }
+
+        const newDecorations = (markers ?? []).map(m => ({
+            range: {
+                startLineNumber: m.line,
+                startColumn: 1,
+                endLineNumber: m.line,
+                endColumn: 1,
+            },
+            options: {
+                isWholeLine: true,
+                className: `marker-${m.severity}`,
+                hoverMessage: { value: `[${m.source}] ${m.message}` },
+            },
+        }))
+
+        decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, newDecorations)
+    }, [editorInstance, markers])
 
     return (
         <MonacoEditor
