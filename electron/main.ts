@@ -225,7 +225,7 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
         stderr: result.stderr || '',
       }
     } catch (err) {
-      const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string }
+      const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string | number }
 
       if (execErr.code === 'ENOENT') {
         return {
@@ -240,12 +240,26 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
       const stdout = execErr.stdout || ''
       const errors = parseGccErrors(stderr)
 
+      // Ako regex nije prepoznao format, ali GCC je vratio grešku
+      if (errors.length === 0 && stderr.trim()) {
+        const firstLine = stderr.trim().split('\n')[0]
+        errors.push({
+          line: 0,
+          column: 0,
+          type: 'error',
+          message: firstLine.replace(/^[^:]+:\d+:\d+:\s+(error|warning):\s*/, ''),
+        })
+      }
+
+      // Non-zero izlazni kod = GCC je pao
+      const hasError = typeof execErr.code === 'number' || errors.some(e => e.type === 'error')
+
       return {
-        success: errors.filter(e => e.type === 'error').length === 0,
+        success: !hasError,
         errors,
         stdout,
         stderr,
-        exePath: errors.filter(e => e.type === 'error').length === 0 ? exePath : undefined,
+        exePath: hasError ? undefined : exePath,
       }
     }
   } catch (err) {

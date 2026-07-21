@@ -30,10 +30,6 @@ function App() {
   const [isCompiling, setIsCompiling] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [terminalOutput, setTerminalOutput] = useState<TerminalLine[]>([])
-  const [compileErrors, setCompileErrors] = useState<GccError[]>([])
-  const [gccStdout, setGccStdout] = useState("")
-  const [gccStderr, setGccStderr] = useState("")
-  const [activeOutputTab, setActiveOutputTab] = useState("terminal")
   const terminalIdRef = useRef(1)
   const exePathRef = useRef<string | null>(null)
 
@@ -193,19 +189,12 @@ function App() {
 
     setIsCompiling(true)
     setTerminalOutput([])
-    setCompileErrors([])
-    setGccStdout("")
-    setGccStderr("")
-    setActiveOutputTab("terminal")
 
     const id = terminalIdRef.current
     terminalIdRef.current += 1
     setTerminalOutput(prev => [...prev, { id, type: "system", text: "$ Kompajliram..." }])
 
     const result = await window.api.compileCode(code)
-
-    setGccStdout(result.stdout)
-    setGccStderr(result.stderr)
 
     if (result.error) {
       setTerminalOutput(prev => [...prev, {
@@ -217,17 +206,15 @@ function App() {
       return
     }
 
-    if (result.errors.length > 0) {
-      setCompileErrors(result.errors)
-      setActiveOutputTab("problems")
-    }
-
     if (!result.success) {
-      setTerminalOutput(prev => [...prev, {
-        id: terminalIdRef.current++,
-        type: "system",
-        text: `Kompajliranje neuspešno (${result.errors.filter(e => e.type === "error").length} grešaka)`,
-      }])
+      result.errors.forEach(err => {
+        const label = err.type === 'error' ? 'greška' : 'upozorenje'
+        setTerminalOutput(prev => [...prev, {
+          id: terminalIdRef.current++,
+          type: "stderr",
+          text: `${label} [L${err.line}:${err.column}] ${err.message}`,
+        }])
+      })
       setIsCompiling(false)
       return
     }
@@ -370,13 +357,8 @@ function App() {
               <ResizablePanel defaultSize="30%" minSize={100}>
                 <OutputPanel
                   terminalOutput={terminalOutput}
-                  compileErrors={compileErrors}
-                  gccStdout={gccStdout}
-                  gccStderr={gccStderr}
                   isRunning={isRunning}
                   onSendStdin={handleSendStdin}
-                  activeTab={activeOutputTab}
-                  onTabChange={setActiveOutputTab}
                 />
               </ResizablePanel>
             </ResizablePanelGroup>

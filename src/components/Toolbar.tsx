@@ -97,23 +97,23 @@ export function Toolbar({
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant="default"
+              variant={isRunning ? "destructive" : "default"}
               size="sm"
               className={cn(
-                "h-8 gap-1.5 px-3 rounded-lg transition-all duration-150",
-                isRunning && "!bg-destructive !text-destructive-foreground hover:!bg-destructive/90"
+                "h-8 gap-1.5 px-3 rounded-lg transition-all duration-200 active:scale-95",
+                isCompiling && "pointer-events-none"
               )}
               onClick={isRunning ? onStop : onRun}
               disabled={isCompiling}
             >
               {isCompiling ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin transition-opacity" />
               ) : isRunning ? (
                 <Square className="h-4 w-4" />
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              <span className="text-xs font-medium">
+              <span className="text-xs font-medium transition-opacity">
                 {isCompiling ? "Kompajliranje..." : isRunning ? "Zaustavi" : "Pokreni"}
               </span>
             </Button>
