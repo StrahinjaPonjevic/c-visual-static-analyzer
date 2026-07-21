@@ -179,7 +179,7 @@ interface GccError {
   message: string
 }
 
-const gccErrorRegex = /^([^:]+):(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
+const gccErrorRegex = /^(?:[a-zA-Z]:)?[^:]+:(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
 
 function parseGccErrors(stderr: string): GccError[] {
   const errors: GccError[] = []
@@ -254,15 +254,18 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
       const stdout = execErr.stdout || ''
       const errors = parseGccErrors(stderr)
 
-      // Ako regex nije prepoznao format, ali GCC je vratio grešku
+      // Ako nijedna linija nije parsirana, ali GCC je vratio grešku
       if (errors.length === 0 && stderr.trim()) {
-        const firstLine = stderr.trim().split('\n')[0]
-        errors.push({
-          line: 0,
-          column: 0,
-          type: 'error',
-          message: firstLine.replace(/^[^:]+:\d+:\d+:\s+(error|warning):\s*/, ''),
-        })
+        const lines = stderr.trim().split('\n')
+        for (const line of lines) {
+          const cleaned = line.replace(/^(?:[a-zA-Z]:)?[^:]+:\d+:\d+:\s+(error|warning):\s*/, '')
+          if (cleaned !== line) {
+            errors.push({ line: 0, column: 0, type: 'error', message: cleaned })
+          }
+        }
+        if (errors.length === 0) {
+          errors.push({ line: 0, column: 0, type: 'error', message: lines[lines.length - 1] })
+        }
       }
 
       // Non-zero izlazni kod = GCC je pao

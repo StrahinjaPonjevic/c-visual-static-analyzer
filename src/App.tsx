@@ -17,7 +17,7 @@ function App() {
   const [code, setCode] = useState("// Otvorite C fajl da biste poceli\n")
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
   const [showSidePanel, setShowSidePanel] = useState(true)
-  const [activeSideTab, setActiveSideTab] = useState<"ai" | "analysis">("ai")
+  const [activeSideTab, setActiveSideTab] = useState<"ai" | "analysis">("analysis")
   const [cursorLine, setCursorLine] = useState(1)
   const [cursorColumn, setCursorColumn] = useState(1)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
@@ -218,14 +218,21 @@ function App() {
     }
 
     if (!result.success) {
-      result.errors.forEach(err => {
-        const label = err.type === 'error' ? 'greška' : 'upozorenje'
+      if (result.stderr.trim()) {
         setTerminalOutput(prev => [...prev, {
           id: terminalIdRef.current++,
           type: "stderr",
-          text: `${label} [L${err.line}:${err.column}] ${err.message}`,
+          text: result.stderr,
         }])
-      })
+      } else if (result.errors.length > 0) {
+        result.errors.forEach(err => {
+          setTerminalOutput(prev => [...prev, {
+            id: terminalIdRef.current++,
+            type: "stderr",
+            text: `${err.message}\n`,
+          }])
+        })
+      }
       setIsCompiling(false)
       return
     }
@@ -367,7 +374,7 @@ function App() {
                 />
               </ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize="30%" minSize={100}>
+              <ResizablePanel defaultSize="40%" minSize={100}>
                 <OutputPanel
                   terminalOutput={terminalOutput}
                   isRunning={isRunning}
