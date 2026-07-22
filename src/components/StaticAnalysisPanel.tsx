@@ -214,7 +214,7 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
         <div className="p-3 space-y-2">
           {/* Metrike section */}
           <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
-            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 [&[data-state=open]>svg:first-child]:rotate-0">
+            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
               {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
               Metrike
             </CollapsibleTrigger>
@@ -243,11 +243,15 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
               {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
               Problemi
               {issues.length > 0 && (
-                <span className="ml-auto inline-flex items-center gap-2">
-                  {errorCount > 0 && <span className="text-red-400">{errorCount} grešaka</span>}
-                  {warningCount > 0 && <span className="text-amber-400">{warningCount} upozorenja</span>}
+                <span className="text-muted-foreground/60 font-normal">
+                  ({errorCount > 0 && warningCount > 0
+                    ? `${errorCount} grešaka, ${warningCount} upozorenja`
+                    : errorCount > 0
+                      ? `${errorCount} grešaka`
+                      : `${warningCount} upozorenja`})
                 </span>
               )}
+              <div className="ml-auto" />
               <Button
                 variant="ghost"
                 size="icon"
