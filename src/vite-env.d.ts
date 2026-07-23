@@ -19,7 +19,7 @@ interface GccResult {
 interface Window {
     api: {
         openFile: () => Promise<{ filePath: string; content: string } | null>
-        saveFile: (path: string, content: string) => Promise<boolean>
+        saveFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
         onMenuOpen: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
         saveAsFile: (content: string) => Promise<string | null>

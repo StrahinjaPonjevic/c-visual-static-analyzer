@@ -26,6 +26,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import type { CppcheckIssue } from "@/types"
+import { stripCommentsAndStrings } from "@/lib/utils"
 
 interface CodeMetrics {
   lines: number
@@ -47,8 +48,9 @@ interface StaticAnalysisPanelProps {
   onIssuesChange?: (issues: CppcheckIssue[]) => void
 }
 
-function computeMetrics(code: string): CodeMetrics {
-  const lines = code.split("\n")
+function computeMetrics(rawCode: string): CodeMetrics {
+  const code = stripCommentsAndStrings(rawCode)
+  const lines = rawCode.split("\n")
   const totalLines = lines.length
   const nonEmptyLines = lines.filter((l) => l.trim().length > 0).length
 
@@ -58,8 +60,8 @@ function computeMetrics(code: string): CodeMetrics {
     ) || []
   ).length
 
-  const ifCount = (code.match(/\bif\s*\(/g) || []).length
   const elseIfCount = (code.match(/\belse\s+if\s*\(/g) || []).length
+  const ifCount = (code.match(/\bif\s*\(/g) || []).length - elseIfCount
 
   const forCount = (code.match(/\bfor\s*\(/g) || []).length
   const whileCount = (code.match(/\bwhile\s*\(/g) || []).length
@@ -78,10 +80,10 @@ function computeMetrics(code: string): CodeMetrics {
   const mallocCalls = (code.match(/\bmalloc\s*\(/g) || []).length
   const freeCalls = (code.match(/\bfree\s*\(/g) || []).length
 
-  const includes = (code.match(/#include\s*[<"]/g) || []).length
+  const includes = (rawCode.match(/#include\s*[<"]/g) || []).length
 
-  const singleLineComments = (code.match(/\/\/.*$/gm) || []).length
-  const multiLineComments = (code.match(/\/\*[\s\S]*?\*\//g) || []).length
+  const singleLineComments = (rawCode.match(/\/\/.*$/gm) || []).length
+  const multiLineComments = (rawCode.match(/\/\*[\s\S]*?\*\//g) || []).length
   const comments = singleLineComments + multiLineComments
 
   return {

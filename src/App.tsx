@@ -25,6 +25,8 @@ function App() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
   const savedCodeRef = useRef(code)
+  const codeRef = useRef(code)
+  codeRef.current = code
 
   const isDirty = code !== savedCodeRef.current
 
@@ -58,6 +60,7 @@ function App() {
   const [terminalOutput, setTerminalOutput] = useState<TerminalLine[]>([])
   const terminalIdRef = useRef(1)
   const exePathRef = useRef<string | null>(null)
+  const compilingRef = useRef(false)
 
   function getLanguageFromPath(filePath: string | null): string {
     if (!filePath) return "C"
@@ -76,16 +79,18 @@ function App() {
   const language = getLanguageFromPath(currentFilePath)
 
   const handleSave = useCallback(async () => {
+    const latestCode = codeRef.current
     if (currentFilePath) {
-      await window.api.saveFile(currentFilePath, code)
+      const result = await window.api.saveFile(currentFilePath, latestCode)
+      if (result.success) savedCodeRef.current = latestCode
     } else {
-      const newPath = await window.api.saveAsFile(code)
+      const newPath = await window.api.saveAsFile(latestCode)
       if (newPath) {
         setCurrentFilePath(newPath)
+        savedCodeRef.current = latestCode
       }
     }
-    savedCodeRef.current = code
-  }, [currentFilePath, code])
+  }, [currentFilePath])
 
   const handleNew = useCallback(() => {
     if (isDirty) {
@@ -211,7 +216,8 @@ function App() {
   // ---- GCC compile & run handlers ----
 
   const handleRun = useCallback(async () => {
-    if (!code.trim()) return
+    if (!codeRef.current.trim() || compilingRef.current) return
+    compilingRef.current = true
 
     setIsCompiling(true)
     setTerminalOutput([])
@@ -221,27 +227,28 @@ function App() {
     terminalIdRef.current += 1
     setTerminalOutput(prev => [...prev, { id, type: "system", text: "$ Kompajliram..." }])
 
-    const result = await window.api.compileCode(code)
-    setGccErrors(result.errors)
+    try {
+      const result = await window.api.compileCode(codeRef.current)
+      setGccErrors(result.errors)
 
-    if (result.error) {
-      setTerminalOutput(prev => [...prev, {
-        id: terminalIdRef.current++,
-        type: "system",
-        text: `Greška: ${result.error}`,
-      }])
-      setIsCompiling(false)
-      return
-    }
+      if (result.error) {
+        setTerminalOutput(prev => [...prev, {
+          id: terminalIdRef.current++,
+          type: "system",
+          text: `Greška: ${result.error}`,
+        }])
+        compilingRef.current = false
+        setIsCompiling(false)
+        return
+      }
 
-    if (!result.success) {
       if (result.stderr.trim()) {
         setTerminalOutput(prev => [...prev, {
           id: terminalIdRef.current++,
           type: "stderr",
           text: result.stderr,
         }])
-      } else if (result.errors.length > 0) {
+      } else if (!result.success && result.errors.length > 0) {
         result.errors.forEach(err => {
           setTerminalOutput(prev => [...prev, {
             id: terminalIdRef.current++,
@@ -250,33 +257,47 @@ function App() {
           }])
         })
       }
-      setIsCompiling(false)
-      return
-    }
 
-    // Kompajliranje uspešno — pokreni program
-    setTerminalOutput(prev => [...prev, {
-      id: terminalIdRef.current++,
-      type: "system",
-      text: "Kompajliranje uspešno. Pokrećem program...\n",
-    }])
+      if (!result.success) {
+        compilingRef.current = false
+        setIsCompiling(false)
+        return
+      }
 
-    exePathRef.current = result.exePath || null
-
-    const runResult = await window.api.runProgram(result.exePath!)
-    if (!runResult.success) {
+      // Kompajliranje uspešno — pokreni program
       setTerminalOutput(prev => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
-        text: `Greška pri pokretanju: ${runResult.error}`,
+        text: "Kompajliranje uspešno. Pokrećem program...\n",
       }])
-      setIsCompiling(false)
-      return
-    }
 
-    setIsRunning(true)
-    setIsCompiling(false)
-  }, [code])
+      exePathRef.current = result.exePath || null
+
+      const runResult = await window.api.runProgram(result.exePath!)
+      if (!runResult.success) {
+        setTerminalOutput(prev => [...prev, {
+          id: terminalIdRef.current++,
+          type: "system",
+          text: `Greška pri pokretanju: ${runResult.error}`,
+        }])
+        compilingRef.current = false
+        setIsCompiling(false)
+        return
+      }
+
+      compilingRef.current = false
+      setIsRunning(true)
+      setIsCompiling(false)
+    } catch (err) {
+      compilingRef.current = false
+      setIsCompiling(false)
+      setTerminalOutput(prev => [...prev, {
+        id: terminalIdRef.current++,
+        type: "system",
+        text: `Neočekivana greška: ${err instanceof Error ? err.message : String(err)}`,
+      }])
+    }
+  }, [])
 
   const handleStop = useCallback(async () => {
     await window.api.killProgram()

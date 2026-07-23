@@ -1,11 +1,5 @@
 import type { CodeMarker, CppcheckIssue } from '@/types'
-
-interface GccError {
-  line: number
-  column: number
-  type: 'error' | 'warning'
-  message: string
-}
+import { stripCommentsAndStrings } from '@/lib/utils'
 
 function mapCppcheckSeverity(severity: CppcheckIssue['severity']): CodeMarker['severity'] {
   switch (severity) {
@@ -20,14 +14,15 @@ function mapCppcheckSeverity(severity: CppcheckIssue['severity']): CodeMarker['s
 
 function computeMetricMarkers(code: string): CodeMarker[] {
   const markers: CodeMarker[] = []
-  const lines = code.split('\n')
+  const stripped = stripCommentsAndStrings(code)
+  const strippedLines = stripped.split('\n')
 
-  const hasMalloc = code.includes('malloc')
-  const hasFree = code.includes('free')
+  const hasMalloc = stripped.includes('malloc')
+  const hasFree = stripped.includes('free')
 
   if (hasMalloc && !hasFree) {
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('malloc')) {
+    for (let i = 0; i < strippedLines.length; i++) {
+      if (strippedLines[i].includes('malloc')) {
         markers.push({
           line: i + 1,
           severity: 'warning',
@@ -39,8 +34,8 @@ function computeMetricMarkers(code: string): CodeMarker[] {
   }
 
   if (hasFree && !hasMalloc) {
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('free')) {
+    for (let i = 0; i < strippedLines.length; i++) {
+      if (strippedLines[i].includes('free')) {
         markers.push({
           line: i + 1,
           severity: 'warning',

@@ -171,6 +171,7 @@ export function Toolbar({
           <Button
             variant="ghost"
             size="icon"
+            type="button"
             className="h-8 w-8 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150"
           >
             <Settings className="h-4 w-4" />

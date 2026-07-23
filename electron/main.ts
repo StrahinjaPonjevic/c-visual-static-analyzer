@@ -71,6 +71,7 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
+let isClosing = false
 
 ipcMain.handle('file:open', async () => {
   const result = await dialog.showOpenDialog({
@@ -85,8 +86,12 @@ ipcMain.handle('file:open', async () => {
 })
 
 ipcMain.handle('file:save', async (_event, filePath: string, content: string) => {
-  await fs.writeFile(filePath, content, 'utf-8')
-  return true
+  try {
+    await fs.writeFile(filePath, content, 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
 })
 
 ipcMain.handle('file:save-as', async (_event, content: string) => {
@@ -206,7 +211,7 @@ function injectUnbuffer(code: string): string {
   const braceIndex = match.index! + match[0].length
   const before = code.slice(0, braceIndex)
   const after = code.slice(braceIndex)
-  return preamble + before + '\n  setvbuf(stdout, NULL, _IONBF, 0);\n  setvbuf(stderr, NULL, _IONBF, 0);\n' + after
+  return preamble + before + '\n' + '  setvbuf(stdout, NULL, _IONBF, 0);\n  setvbuf(stderr, NULL, _IONBF, 0);\n' + after
 }
 
 ipcMain.handle('gcc:compile', async (_event, code: string) => {
@@ -231,12 +236,15 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
         timeout: 30000,
       })
 
+      const stderr = result.stderr || ''
+      const warnings = parseGccErrors(stderr)
+
       return {
         success: true,
         exePath,
-        errors: [] as GccError[],
+        errors: warnings,
         stdout: result.stdout || '',
-        stderr: result.stderr || '',
+        stderr,
       }
     } catch (err) {
       const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string | number }
@@ -294,6 +302,16 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
 // ---- Program run (interactive via pipe) ----
 
 let runningProcess: import('node:child_process').ChildProcess | null = null
+let runningExePath: string | null = null
+
+async function cleanupExe(exePath: string | null) {
+  if (!exePath) return
+  try {
+    await fs.unlink(exePath)
+  } catch {
+    // ignore — file may already be deleted or locked on Windows
+  }
+}
 
 ipcMain.handle('program:run', async (_event, exePath: string) => {
   if (runningProcess) {
@@ -301,15 +319,12 @@ ipcMain.handle('program:run', async (_event, exePath: string) => {
   }
 
   try {
-    await fs.access(exePath, fs.constants.X_OK)
+    await fs.access(exePath, fs.constants.R_OK)
   } catch {
-    try {
-      await fs.access(exePath, fs.constants.R_OK)
-    } catch {
-      return { success: false, error: 'Izvršni fajl nije pronađen' }
-    }
+    return { success: false, error: 'Izvršni fajl nije pronađen' }
   }
 
+  runningExePath = exePath
   runningProcess = spawn(exePath, [], {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: os.tmpdir(),
@@ -320,7 +335,10 @@ ipcMain.handle('program:run', async (_event, exePath: string) => {
     if (win && !win.isDestroyed()) {
       win.webContents.send('program:error', err.message)
     }
+    const exeToClean = runningExePath
     runningProcess = null
+    runningExePath = null
+    cleanupExe(exeToClean)
   })
 
   runningProcess.stdout?.on('data', (chunk: Buffer) => {
@@ -342,7 +360,10 @@ ipcMain.handle('program:run', async (_event, exePath: string) => {
     if (win && !win.isDestroyed()) {
       win.webContents.send('program:exit', code)
     }
+    const exeToClean = runningExePath
     runningProcess = null
+    runningExePath = null
+    cleanupExe(exeToClean)
   })
 
   return { success: true }
@@ -365,21 +386,25 @@ ipcMain.handle('program:kill', async () => {
   } else {
     runningProcess.kill('SIGTERM')
   }
+  const exeToClean = runningExePath
   runningProcess = null
+  runningExePath = null
+  cleanupExe(exeToClean)
   return { success: true }
 })
 
-// Clean up running process on app quit
-app.on('before-quit', () => {
-  if (runningProcess) {
-    if (process.platform === 'win32' && runningProcess.pid) {
-      spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
-    } else {
-      runningProcess.kill('SIGTERM')
-    }
-    runningProcess = null
+function cleanupRunningProcess() {
+  if (!runningProcess) return
+  if (process.platform === 'win32' && runningProcess.pid) {
+    spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
+  } else {
+    runningProcess.kill('SIGTERM')
   }
-})
+  const exeToClean = runningExePath
+  runningProcess = null
+  runningExePath = null
+  cleanupExe(exeToClean)
+}
 
 ipcMain.on('window:minimize', () => {
   win?.minimize()
@@ -398,6 +423,7 @@ ipcMain.on('window:close', () => {
 })
 
 ipcMain.on('app:force-close', () => {
+  isClosing = true
   win?.destroy()
 })
 
@@ -438,6 +464,7 @@ function buildMenu(win: BrowserWindow) {
 }
 
 function createWindow() {
+  isClosing = false
   const iconName = process.platform === 'win32' ? 'logo.ico' : 'logo.png'
 
   win = new BrowserWindow({
@@ -452,6 +479,7 @@ function createWindow() {
   buildMenu(win)
 
   win.on('close', (e) => {
+    if (isClosing) return
     e.preventDefault()
     win?.webContents.send('app:confirm-close')
   })
@@ -472,6 +500,7 @@ function createWindow() {
 }
 
 app.on('window-all-closed', () => {
+  cleanupRunningProcess()
   if (process.platform !== 'darwin') {
     app.quit()
     win = null
