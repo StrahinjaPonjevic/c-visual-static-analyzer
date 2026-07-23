@@ -41,13 +41,27 @@ export function AIPanel({ code }: AIPanelProps) {
   const [error, setError] = useState<string | null>(null)
   const messageIdRef = useRef(2)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollViewportRef = useRef<HTMLElement | null>(null)
   const streamingRef = useRef(false)
   const thinkingChunksRef = useRef("")
   const contentChunksRef = useRef("")
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      const viewport = scrollRef.current.querySelector<HTMLElement>("[data-radix-scroll-area-viewport]")
+      if (viewport) scrollViewportRef.current = viewport
+    }
+  }, [])
+
+  function isNearBottom() {
+    if (!scrollViewportRef.current) return true
+    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current
+    return scrollHeight - scrollTop - clientHeight < 150
+  }
+
+  useEffect(() => {
+    if (scrollViewportRef.current && isNearBottom()) {
+      scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight
     }
   }, [messages])
 
@@ -203,11 +217,11 @@ export function AIPanel({ code }: AIPanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}
+              className={`flex gap-3 min-w-0 ${message.role === "user" ? "justify-end" : ""}`}
             >
               {message.role === "assistant" && (
                 <Avatar className="h-8 w-8 shrink-0 mt-0.5">
@@ -217,10 +231,10 @@ export function AIPanel({ code }: AIPanelProps) {
                 </Avatar>
               )}
               <div
-                className={`rounded-lg px-3.5 py-2.5 text-sm leading-relaxed max-w-[85%] ${
+                className={`rounded-lg px-3.5 py-2.5 text-sm leading-relaxed max-w-[85%] min-w-0 ${
                   message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted/60 border"
+                    ? "bg-primary text-primary-foreground break-all"
+                    : "bg-muted/60 border break-words"
                 }`}
               >
                 {message.role === "assistant" ? (
@@ -243,7 +257,11 @@ export function AIPanel({ code }: AIPanelProps) {
                       <>
                         <MarkdownRenderer content={message.content} />
                         {message.isStreaming && (
-                          <span className="inline text-primary/70 animate-pulse font-mono text-[0.9em] align-baseline">|</span>
+                          <span className="inline-flex items-center gap-0.5 ml-1 align-baseline">
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
+                          </span>
                         )}
                       </>
                     ) : message.isStreaming ? (

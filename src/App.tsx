@@ -427,7 +427,7 @@ function App() {
           {showSidePanel && (
             <>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize="28%" minSize={200}>
+              <ResizablePanel defaultSize="28%" minSize={300}>
                 <SidePanel
                   activeTab={activeSideTab}
                   code={code}

@@ -13,7 +13,7 @@ const components: Components = {
 
     if (isBlock) {
       return (
-        <div className="relative my-2">
+        <div className="relative my-2 min-w-0">
           {match && (
             <span className="absolute right-2 top-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               {match[1]}
@@ -30,7 +30,7 @@ const components: Components = {
 
     return (
       <code
-        className="rounded bg-muted px-1.5 py-0.5 text-[13px] font-mono text-primary"
+        className="rounded bg-muted px-1.5 py-0.5 text-[13px] font-mono text-primary overflow-wrap-anywhere"
         {...props}
       >
         {children}
@@ -112,8 +112,10 @@ const components: Components = {
 
 export function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {content}
-    </ReactMarkdown>
+    <div className="min-w-0 break-words">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {content}
+      </ReactMarkdown>
+    </div>
   )
 }
