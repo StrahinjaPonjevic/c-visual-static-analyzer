@@ -74,4 +74,24 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('program:error', handler)
         return () => ipcRenderer.removeListener('program:error', handler)
     },
+
+    // Ollama LLM (streaming)
+    sendChatMessage: (messages: { role: string; content: string }[]) =>
+        ipcRenderer.send('llm:chat', messages),
+    stopGeneration: () => ipcRenderer.send('llm:stop'),
+    onLlmChunk: (callback: (data: { content: string; role: string }) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, data: { content: string; role: string }) => callback(data)
+        ipcRenderer.on('llm:chunk', handler)
+        return () => ipcRenderer.removeListener('llm:chunk', handler)
+    },
+    onLlmDone: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('llm:done', handler)
+        return () => ipcRenderer.removeListener('llm:done', handler)
+    },
+    onLlmError: (callback: (error: string) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, error: string) => callback(error)
+        ipcRenderer.on('llm:error', handler)
+        return () => ipcRenderer.removeListener('llm:error', handler)
+    },
 })

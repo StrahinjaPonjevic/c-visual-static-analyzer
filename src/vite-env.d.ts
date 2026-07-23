@@ -52,5 +52,12 @@ interface Window {
         onProgramStderr: (callback: (data: string) => void) => () => void
         onProgramExit: (callback: (code: number | null) => void) => () => void
         onProgramError: (callback: (error: string) => void) => () => void
+
+        // Ollama LLM (streaming)
+        sendChatMessage: (messages: { role: string; content: string }[]) => void
+        stopGeneration: () => void
+        onLlmChunk: (callback: (data: { content: string; role: string }) => void) => () => void
+        onLlmDone: (callback: () => void) => () => void
+        onLlmError: (callback: (error: string) => void) => () => void
     }
 }

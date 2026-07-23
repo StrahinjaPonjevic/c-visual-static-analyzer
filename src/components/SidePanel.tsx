@@ -11,7 +11,7 @@ interface SidePanelProps {
 export function SidePanel({ activeTab, code, onIssuesChange }: SidePanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-sidebar">
-      {activeTab === "ai" ? <AIPanel /> : <StaticAnalysisPanel code={code} onIssuesChange={onIssuesChange} />}
+      {activeTab === "ai" ? <AIPanel code={code} /> : <StaticAnalysisPanel code={code} onIssuesChange={onIssuesChange} />}
     </div>
   )
 }

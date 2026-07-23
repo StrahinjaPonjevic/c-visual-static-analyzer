@@ -393,6 +393,143 @@ ipcMain.handle('program:kill', async () => {
   return { success: true }
 })
 
+// ---- Ollama LLM integration (streaming) ----
+
+interface LlmMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+let currentLlmAbort: AbortController | null = null
+
+ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
+  if (currentLlmAbort) {
+    currentLlmAbort.abort()
+    currentLlmAbort = null
+  }
+
+  const abort = new AbortController()
+  currentLlmAbort = abort
+
+  const win = BrowserWindow.getAllWindows()[0]
+  if (!win || win.isDestroyed()) return
+
+  try {
+    const response = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gemma4:e4b',
+        messages,
+        stream: true,
+        think: true,
+      }),
+      signal: abort.signal,
+    })
+
+    if (!response.ok) {
+      const text = await response.text()
+      win.webContents.send('llm:error', `Ollama greška (${response.status}): ${text}`)
+      return
+    }
+
+    if (!response.body) {
+      win.webContents.send('llm:error', 'Ollama nije vratio telo odgovora.')
+      return
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    try {
+      // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const json = JSON.parse(line) as {
+              message?: { content?: string; thinking?: string; role?: string }
+              done?: boolean
+            }
+
+            if (json.done) continue
+
+            if (json.message?.thinking) {
+              win.webContents.send('llm:chunk', {
+                content: json.message.thinking,
+                role: 'thinking',
+              })
+            }
+
+            if (json.message?.content) {
+              win.webContents.send('llm:chunk', {
+                content: json.message.content,
+                role: 'assistant',
+              })
+            }
+          } catch {
+            // malformed line — skip
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const json = JSON.parse(buffer) as {
+            message?: { content?: string; thinking?: string; role?: string }
+            done?: boolean
+          }
+          if (!json.done) {
+            if (json.message?.thinking) {
+              win.webContents.send('llm:chunk', {
+                content: json.message.thinking,
+                role: 'thinking',
+              })
+            }
+            if (json.message?.content) {
+              win.webContents.send('llm:chunk', {
+                content: json.message.content,
+                role: 'assistant',
+              })
+            }
+          }
+        } catch {
+          // incomplete final fragment
+        }
+      }
+    } finally {
+      reader.cancel()
+    }
+
+    win.webContents.send('llm:done')
+  } catch (err) {
+    if (abort.signal.aborted) return
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
+      win.webContents.send('llm:error', 'Ollama nije pokrenuta. Pokrenite "ollama serve" ili Ollama aplikaciju.')
+    } else {
+      win.webContents.send('llm:error', msg)
+    }
+  } finally {
+    currentLlmAbort = null
+  }
+})
+
+ipcMain.on('llm:stop', () => {
+  if (currentLlmAbort) {
+    currentLlmAbort.abort()
+    currentLlmAbort = null
+  }
+})
+
 function cleanupRunningProcess() {
   if (!runningProcess) return
   if (process.platform === 'win32' && runningProcess.pid) {
