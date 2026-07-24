@@ -71,7 +71,12 @@
     min-height: 100vh;
     height: 100vh;
     overflow: hidden;
+    scrollbar-width: none;
   }
+}
+
+*::-webkit-scrollbar {
+  display: none;
 }
 
 /* Code marker decorations for Monaco Editor */
