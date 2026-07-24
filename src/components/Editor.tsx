@@ -15,6 +15,7 @@ type Props = {
 export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off' }: Props) {
     const [editorInstance, setEditorInstance] = useState<unknown>(null)
     const decorationIdsRef = useRef<string[]>([])
+    const isInternalChange = useRef(false)
 
     const handleEditorMount = (monacoEditor: unknown) => {
         setEditorInstance(monacoEditor)
@@ -52,12 +53,31 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, newDecorations)
     }, [editorInstance, markers])
 
+    useEffect(() => {
+        if (!editorInstance) return
+
+        if (isInternalChange.current) {
+            isInternalChange.current = false
+            return
+        }
+
+        const editor = editorInstance as { getValue: () => string; setValue: (v: string) => void }
+        if (editor.getValue() !== value) {
+            editor.setValue(value)
+        }
+    }, [value, editorInstance])
+
+    const handleChange = (v: string | undefined) => {
+        isInternalChange.current = true
+        onChange(v ?? '')
+    }
+
     return (
         <MonacoEditor
             height="100%"
             language='c'
-            value={value}
-            onChange={(v) => onChange(v ?? '')}
+            defaultValue={value}
+            onChange={handleChange}
             theme='vs-dark'
             options={{ fontSize, tabSize, wordWrap, minimap: { enabled: false } }}
             onMount={handleEditorMount}
