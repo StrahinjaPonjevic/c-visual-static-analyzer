@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect } from "react"
 import {
   AlertTriangle,
   CheckCircle,
@@ -45,7 +45,9 @@ interface CodeMetrics {
 
 interface StaticAnalysisPanelProps {
   code: string
-  onIssuesChange?: (issues: CppcheckIssue[]) => void
+  cppcheckIssues: CppcheckIssue[]
+  isAnalyzing: boolean
+  onRefreshCppcheck: () => void
 }
 
 function computeMetrics(rawCode: string): CodeMetrics {
@@ -124,67 +126,22 @@ function getSeverityIcon(severity: CppcheckIssue["severity"]) {
   }
 }
 
-export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPanelProps) {
+export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefreshCppcheck }: StaticAnalysisPanelProps) {
   const [metrics, setMetrics] = useState<CodeMetrics>({
     lines: 0, totalLines: 0, functions: 0, ifStatements: 0, loops: 0,
     arrays: 0, pointers: 0, structs: 0, mallocCalls: 0, freeCalls: 0, includes: 0, comments: 0,
   })
-  const [issues, setIssues] = useState<CppcheckIssue[]>([])
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const runCppcheck = useCallback(async (codeToAnalyze: string) => {
-    setIsAnalyzing(true)
-    setErrorMessage(null)
-    try {
-      const result = await window.api.analyzeCode(codeToAnalyze)
-      if (result.success) {
-        const issues = result.issues as CppcheckIssue[]
-        setIssues(issues)
-        onIssuesChange?.(issues)
-      } else {
-        setErrorMessage(result.error || "Greška pri analizi")
-        setIssues([])
-        onIssuesChange?.([])
-      }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Nepoznata greška")
-      setIssues([])
-      onIssuesChange?.([])
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }, [onIssuesChange])
-
-  const analyzeCode = useCallback(() => {
-    const computed = computeMetrics(code)
-    setMetrics(computed)
-
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-
-    timeoutRef.current = setTimeout(() => {
-      runCppcheck(code)
-    }, 600)
-  }, [code, runCppcheck])
 
   useEffect(() => {
-    analyzeCode()
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-    }
-  }, [analyzeCode])
+    const computed = computeMetrics(code)
+    setMetrics(computed)
+  }, [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
   const [issuesOpen, setIssuesOpen] = useState(true)
 
-  const errorCount = issues.filter((i) => i.severity === "error").length
-  const warningCount = issues.filter((i) => i.severity === "warning").length
+  const errorCount = cppcheckIssues.filter((i) => i.severity === "error").length
+  const warningCount = cppcheckIssues.filter((i) => i.severity === "warning").length
 
   const metricCards = [
     { icon: Hash, label: "Linija koda", value: metrics.lines, sub: `Ukupno ${metrics.totalLines}` },
@@ -201,17 +158,6 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Error message banner */}
-      {errorMessage && (
-        <div className="flex items-start gap-2 mx-3 mt-3 rounded-md border border-red-500/30 bg-red-500/10 p-2.5 text-xs shrink-0">
-          <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
-          <div className="text-red-400">
-            <p className="font-medium">Greška pri Cppcheck analizi</p>
-            <p className="text-muted-foreground mt-0.5 break-words">{errorMessage}</p>
-          </div>
-        </div>
-      )}
-
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-2">
           {/* Metrike section */}
@@ -244,7 +190,7 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
             <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
               {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
               Problemi
-              {issues.length > 0 && (
+              {cppcheckIssues.length > 0 && (
                 <span className="text-muted-foreground/60 font-normal">
                   ({errorCount > 0 && warningCount > 0
                     ? `${errorCount} grešaka, ${warningCount} upozorenja`
@@ -260,8 +206,7 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
                 className="h-5 w-5 ml-auto shrink-0"
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (timeoutRef.current) clearTimeout(timeoutRef.current)
-                  runCppcheck(code)
+                  onRefreshCppcheck()
                 }}
                 disabled={isAnalyzing}
               >
@@ -269,7 +214,7 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">
-              {issues.length === 0 ? (
+              {cppcheckIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle className="h-8 w-8 text-emerald-400 mb-2" />
                   <p className="text-sm font-medium text-muted-foreground">Nema pronađenih problema</p>
@@ -277,7 +222,7 @@ export function StaticAnalysisPanel({ code, onIssuesChange }: StaticAnalysisPane
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {issues.map((issue, index) => (
+                  {cppcheckIssues.map((issue, index) => (
                     <Card key={`${issue.id}-${issue.line}-${index}`} className="border shadow-none">
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2.5">

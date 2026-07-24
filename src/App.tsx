@@ -15,6 +15,23 @@ import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
 import type { CodeMarker, CppcheckIssue } from "@/types"
 import { computeMarkers } from "@/analysis/markers"
 
+export interface Message {
+  id: number
+  role: "user" | "assistant"
+  content: string
+  thinking?: string
+  isStreaming?: boolean
+}
+
+const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš studentima da:
+- Razumeju strukturu i logiku C koda
+- Pronađu i isprave greške (sintaktičke, logičke, memorijske)
+- Nauče najbolje prakse u C programiranju
+- Razumeju pokazivače, strukture, dinamičku alokaciju memorije
+- Interpretiraju GCC warning i error poruke
+
+Odgovaraj kratko i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno. Budi edukativan i strpljiv sa početnicima.`
+
 function App() {
   const [code, setCode] = useState("// Otvorite C fajl da biste poceli\n")
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
@@ -50,8 +67,208 @@ function App() {
     setMarkers(computeMarkers(code, cppcheckIssues, gccErrors))
   }, [code, cppcheckIssues, gccErrors])
 
-  const handleIssuesChange = useCallback((issues: CppcheckIssue[]) => {
-    setCppcheckIssues(issues)
+  // ---- Cppcheck auto-trigger ----
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const cppcheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const runCppcheck = useCallback(async (codeToAnalyze: string) => {
+    setIsAnalyzing(true)
+    try {
+      const result = await window.api.analyzeCode(codeToAnalyze)
+      if (result.success) {
+        setCppcheckIssues(result.issues as CppcheckIssue[])
+      } else {
+        setCppcheckIssues([])
+      }
+    } catch {
+      setCppcheckIssues([])
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (cppcheckTimeoutRef.current) {
+      clearTimeout(cppcheckTimeoutRef.current)
+    }
+    cppcheckTimeoutRef.current = setTimeout(() => {
+      runCppcheck(code)
+    }, 600)
+    return () => {
+      if (cppcheckTimeoutRef.current) {
+        clearTimeout(cppcheckTimeoutRef.current)
+      }
+    }
+  }, [code, runCppcheck])
+
+  const handleRefreshCppcheck = useCallback(() => {
+    if (cppcheckTimeoutRef.current) clearTimeout(cppcheckTimeoutRef.current)
+    runCppcheck(code)
+  }, [code, runCppcheck])
+
+  // ---- AI Chat state ----
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      role: "assistant",
+      content: "Zdravo! Ja sam vaš AI asistent za programiranje. Mogu vam pomoći sa objašnjavanjem koda, pronalaženjem grešaka i učenjem C programiranja. Kako mogu da pomognem?",
+    },
+  ])
+  const [aiInput, setAiInput] = useState("")
+  const [isAiLoading, setIsAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const aiMessageIdRef = useRef(2)
+  const aiStreamingRef = useRef(false)
+  const aiThinkingChunksRef = useRef("")
+  const aiContentChunksRef = useRef("")
+
+  useEffect(() => {
+    const cleanChunk = window.api.onLlmChunk((data) => {
+      if (data.role === "thinking") {
+        aiThinkingChunksRef.current += data.content
+      } else {
+        aiContentChunksRef.current += data.content
+      }
+
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (!last?.isStreaming) return prev
+        return prev.map((m) =>
+          m.id === last.id
+            ? {
+                ...m,
+                thinking: aiThinkingChunksRef.current || undefined,
+                content: aiContentChunksRef.current,
+              }
+            : m
+        )
+      })
+    })
+
+    const cleanDone = window.api.onLlmDone(() => {
+      const lastMsgId = aiMessageIdRef.current - 1
+      const finalContent = aiContentChunksRef.current
+      const finalThinking = aiThinkingChunksRef.current
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === lastMsgId
+            ? {
+                ...m,
+                content: finalContent || "Prazan odgovor.",
+                thinking: finalThinking || undefined,
+                isStreaming: false,
+              }
+            : m
+        )
+      )
+      aiStreamingRef.current = false
+      setIsAiLoading(false)
+    })
+
+    const cleanError = window.api.onLlmError((err) => {
+      setAiError(err)
+      setMessages((prev) => {
+        const last = prev[prev.length - 1]
+        if (last?.isStreaming) {
+          return prev.map((m) =>
+            m.id === last.id
+              ? { ...m, content: `Greška: ${err}`, isStreaming: false }
+              : m
+          )
+        }
+        return [
+          ...prev,
+          {
+            id: aiMessageIdRef.current++,
+            role: "assistant",
+            content: `Greška: ${err}`,
+          },
+        ]
+      })
+      aiThinkingChunksRef.current = ""
+      aiContentChunksRef.current = ""
+      aiStreamingRef.current = false
+      setIsAiLoading(false)
+    })
+
+    return () => {
+      cleanChunk()
+      cleanDone()
+      cleanError()
+    }
+  }, [])
+
+  const handleAiSend = useCallback(() => {
+    if (!aiInput.trim() || isAiLoading) return
+
+    const userMessage: Message = {
+      id: aiMessageIdRef.current++,
+      role: "user",
+      content: aiInput,
+    }
+
+    const assistantMessage: Message = {
+      id: aiMessageIdRef.current++,
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+    }
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
+    setAiInput("")
+    setIsAiLoading(true)
+    setAiError(null)
+    aiStreamingRef.current = true
+    aiThinkingChunksRef.current = ""
+    aiContentChunksRef.current = ""
+
+    const apiMessages: { role: string; content: string }[] = [
+      { role: "system", content: SYSTEM_PROMPT },
+    ]
+
+    if (codeRef.current.trim()) {
+      apiMessages.push({
+        role: "system",
+        content: `Trenutni kod u editoru:\n\`\`\`c\n${codeRef.current}\n\`\`\``,
+      })
+    }
+
+    for (const msg of messages) {
+      if (msg.id === 1) continue
+      apiMessages.push({ role: msg.role, content: msg.content })
+    }
+
+    apiMessages.push({ role: "user", content: aiInput })
+
+    window.api.sendChatMessage(apiMessages)
+  }, [aiInput, isAiLoading, messages])
+
+  const handleAiStop = useCallback(() => {
+    window.api.stopGeneration()
+    const finalContent = aiContentChunksRef.current
+    const finalThinking = aiThinkingChunksRef.current
+    aiStreamingRef.current = false
+
+    setMessages((prev) => {
+      const last = prev[prev.length - 1]
+      if (last?.isStreaming) {
+        return prev.map((m) =>
+          m.id === last.id
+            ? {
+                ...m,
+                content: finalContent || "Prekinuto.",
+                thinking: finalThinking || undefined,
+                isStreaming: false,
+              }
+            : m
+        )
+      }
+      return prev
+    })
+
+    aiThinkingChunksRef.current = ""
+    aiContentChunksRef.current = ""
+    setIsAiLoading(false)
   }, [])
 
   // ---- GCC compile & run state ----
@@ -431,7 +648,16 @@ function App() {
                 <SidePanel
                   activeTab={activeSideTab}
                   code={code}
-                  onIssuesChange={handleIssuesChange}
+                  cppcheckIssues={cppcheckIssues}
+                  isAnalyzing={isAnalyzing}
+                  onRefreshCppcheck={handleRefreshCppcheck}
+                  messages={messages}
+                  aiInput={aiInput}
+                  onAiInputChange={setAiInput}
+                  isAiLoading={isAiLoading}
+                  aiError={aiError}
+                  onAiSend={handleAiSend}
+                  onAiStop={handleAiStop}
                 />
               </ResizablePanel>
             </>

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useRef, useEffect } from "react"
 import { Send, Bot, User, Loader2, AlertCircle, StopCircle, ChevronRight, Brain } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -6,45 +6,22 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-
-interface Message {
-  id: number
-  role: "user" | "assistant"
-  content: string
-  thinking?: string
-  isStreaming?: boolean
-}
+import type { Message } from "@/App"
 
 interface AIPanelProps {
   code: string
+  messages: Message[]
+  input: string
+  onInputChange: (value: string) => void
+  isLoading: boolean
+  error: string | null
+  onSend: () => void
+  onStop: () => void
 }
 
-const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš studentima da:
-- Razumeju strukturu i logiku C koda
-- Pronađu i isprave greške (sintaktičke, logičke, memorijske)
-- Nauče najbolje prakse u C programiranju
-- Razumeju pokazivače, strukture, dinamičku alokaciju memorije
-- Interpretiraju GCC warning i error poruke
-
-Odgovaraj kratko i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno. Budi edukativan i strpljiv sa početnicima.`
-
-export function AIPanel({ code }: AIPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "assistant",
-      content: "Zdravo! Ja sam vaš AI asistent za programiranje. Mogu vam pomoći sa objašnjavanjem koda, pronalaženjem grešaka i učenjem C programiranja. Kako mogu da pomognem?",
-    },
-  ])
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const messageIdRef = useRef(2)
+export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop }: AIPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLElement | null>(null)
-  const streamingRef = useRef(false)
-  const thinkingChunksRef = useRef("")
-  const contentChunksRef = useRef("")
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -64,155 +41,6 @@ export function AIPanel({ code }: AIPanelProps) {
       scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight
     }
   }, [messages])
-
-  useEffect(() => {
-    const cleanChunk = window.api.onLlmChunk((data) => {
-      if (data.role === "thinking") {
-        thinkingChunksRef.current += data.content
-      } else {
-        contentChunksRef.current += data.content
-      }
-
-      setMessages((prev) => {
-        const last = prev[prev.length - 1]
-        if (!last?.isStreaming) return prev
-        return prev.map((m) =>
-          m.id === last.id
-            ? {
-                ...m,
-                thinking: thinkingChunksRef.current || undefined,
-                content: contentChunksRef.current,
-              }
-            : m
-        )
-      })
-    })
-
-    const cleanDone = window.api.onLlmDone(() => {
-      const lastMsgId = messageIdRef.current - 1
-      const finalContent = contentChunksRef.current
-      const finalThinking = thinkingChunksRef.current
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === lastMsgId
-            ? {
-                ...m,
-                content: finalContent || "Prazan odgovor.",
-                thinking: finalThinking || undefined,
-                isStreaming: false,
-              }
-            : m
-        )
-      )
-      streamingRef.current = false
-      setIsLoading(false)
-    })
-
-    const cleanError = window.api.onLlmError((err) => {
-      setError(err)
-      setMessages((prev) => {
-        const last = prev[prev.length - 1]
-        if (last?.isStreaming) {
-          return prev.map((m) =>
-            m.id === last.id
-              ? { ...m, content: `Greška: ${err}`, isStreaming: false }
-              : m
-          )
-        }
-        return [
-          ...prev,
-          {
-            id: messageIdRef.current++,
-            role: "assistant",
-            content: `Greška: ${err}`,
-          },
-        ]
-      })
-      thinkingChunksRef.current = ""
-      contentChunksRef.current = ""
-      streamingRef.current = false
-      setIsLoading(false)
-    })
-
-    return () => {
-      cleanChunk()
-      cleanDone()
-      cleanError()
-    }
-  }, [])
-
-  function handleSend() {
-    if (!input.trim() || isLoading) return
-
-    const userMessage: Message = {
-      id: messageIdRef.current++,
-      role: "user",
-      content: input,
-    }
-
-    const assistantMessage: Message = {
-      id: messageIdRef.current++,
-      role: "assistant",
-      content: "",
-      isStreaming: true,
-    }
-
-    setMessages((prev) => [...prev, userMessage, assistantMessage])
-    setInput("")
-    setIsLoading(true)
-    setError(null)
-    streamingRef.current = true
-    thinkingChunksRef.current = ""
-    contentChunksRef.current = ""
-
-    const apiMessages: { role: string; content: string }[] = [
-      { role: "system", content: SYSTEM_PROMPT },
-    ]
-
-    if (code.trim()) {
-      apiMessages.push({
-        role: "system",
-        content: `Trenutni kod u editoru:\n\`\`\`c\n${code}\n\`\`\``,
-      })
-    }
-
-    for (const msg of messages) {
-      if (msg.id === 1) continue
-      apiMessages.push({ role: msg.role, content: msg.content })
-    }
-
-    apiMessages.push({ role: "user", content: input })
-
-    window.api.sendChatMessage(apiMessages)
-  }
-
-  function handleStop() {
-    window.api.stopGeneration()
-    const finalContent = contentChunksRef.current
-    const finalThinking = thinkingChunksRef.current
-    streamingRef.current = false
-
-    setMessages((prev) => {
-      const last = prev[prev.length - 1]
-      if (last?.isStreaming) {
-        return prev.map((m) =>
-          m.id === last.id
-            ? {
-                ...m,
-                content: finalContent || "Prekinuto.",
-                thinking: finalThinking || undefined,
-                isStreaming: false,
-              }
-            : m
-        )
-      }
-      return prev
-    })
-
-    thinkingChunksRef.current = ""
-    contentChunksRef.current = ""
-    setIsLoading(false)
-  }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -299,16 +127,16 @@ export function AIPanel({ code }: AIPanelProps) {
           onSubmit={(e) => {
             e.preventDefault()
             if (isLoading) {
-              handleStop()
+              onStop()
             } else {
-              handleSend()
+              onSend()
             }
           }}
           className="flex gap-2"
         >
           <Input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => onInputChange(e.target.value)}
             placeholder="Pitajte nešto o kodu..."
             className="h-9 text-sm"
             disabled={false}
