@@ -30,6 +30,7 @@ interface ToolbarProps {
   onStop: () => void
   isRunning: boolean
   isCompiling: boolean
+  onSettings: () => void
 }
 
 export function Toolbar({
@@ -44,6 +45,7 @@ export function Toolbar({
   onStop,
   isRunning,
   isCompiling,
+  onSettings,
 }: ToolbarProps) {
   return (
     <div className="flex h-10 items-center border-b bg-secondary px-2 gap-1">
@@ -173,6 +175,7 @@ export function Toolbar({
             size="icon"
             type="button"
             className="h-8 w-8 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150"
+            onClick={onSettings}
           >
             <Settings className="h-4 w-4" />
           </Button>

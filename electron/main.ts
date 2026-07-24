@@ -5,6 +5,7 @@ import os from 'node:os'
 import fs from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { loadSettings, saveSettings, DEFAULTS, type AppSettings } from './settings'
 
 const execFileAsync = promisify(execFile)
 
@@ -106,6 +107,12 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
 ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<CppcheckResult> => {
   let tempFile: string | null = null
   try {
+    const settings = await loadSettings().catch(() => null)
+    const extraFlags = settings?.cppcheck.extraFlags
+      ? settings.cppcheck.extraFlags.split(/\s+/).filter(Boolean)
+      : []
+    const cStandard = settings?.compiler.cStandard || 'c11'
+
     const tempDir = os.tmpdir()
     tempFile = path.join(tempDir, `cppcheck_${Date.now()}.c`)
     await fs.writeFile(tempFile, code, 'utf-8')
@@ -118,9 +125,10 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
       const result = await execFileAsync(cppcheckExe, [
         '--enable=all',
         '--inline-suppr',
-        '--std=c11',
+        `--std=${cStandard}`,
         '--xml-version=2',
         '-q',
+        ...extraFlags,
         tempFile,
       ], {
         maxBuffer: 10 * 1024 * 1024,
@@ -158,6 +166,35 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
         // ignore
       }
     }
+  }
+})
+
+// ---- Cppcheck detection ----
+
+ipcMain.handle('cppcheck:check', async (): Promise<{ detected: boolean; version?: string }> => {
+  const cppcheckExe = process.platform === 'win32' ? 'cppcheck.exe' : 'cppcheck'
+  try {
+    const { stdout } = await execFileAsync(cppcheckExe, ['--version'], { timeout: 5000 })
+    const firstLine = stdout.trim()
+    const version = firstLine || undefined
+    return { detected: true, version }
+  } catch {
+    return { detected: false }
+  }
+})
+
+// ---- Settings ----
+
+ipcMain.handle('settings:get', async (): Promise<AppSettings> => {
+  return loadSettings()
+})
+
+ipcMain.handle('settings:save', async (_event, settings: AppSettings): Promise<{ success: boolean; error?: string }> => {
+  try {
+    await saveSettings(settings)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
   }
 })
 
@@ -220,6 +257,18 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
   const cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
   const exePath = path.join(tempDir, process.platform === 'win32' ? `gcc_${timestamp}.exe` : `gcc_${timestamp}`)
 
+  let settings: AppSettings
+  try {
+    settings = await loadSettings()
+  } catch {
+    settings = { ...DEFAULTS }
+  }
+
+  const cStandard = settings.compiler.cStandard || 'c11'
+  const extraFlags = settings.compiler.extraFlags
+    ? settings.compiler.extraFlags.split(/\s+/).filter(Boolean)
+    : []
+
   try {
     const injectedCode = injectUnbuffer(code)
     await fs.writeFile(cFilePath, injectedCode, 'utf-8')
@@ -228,7 +277,8 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
 
     try {
       const result = await execFileAsync(gccExe, [
-        '-std=c11', '-Wall', '-Wextra',
+        `-std=${cStandard}`, '-Wall', '-Wextra',
+        ...extraFlags,
         '-o', exePath,
         cFilePath,
       ], {
@@ -414,12 +464,21 @@ ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
   const win = BrowserWindow.getAllWindows()[0]
   if (!win || win.isDestroyed()) return
 
+  let settings: AppSettings
   try {
-    const response = await fetch('http://localhost:11434/api/chat', {
+    settings = await loadSettings()
+  } catch {
+    win.webContents.send('llm:error', 'Greška pri učitavanju podešavanja.')
+    return
+  }
+
+  try {
+    const ollamaUrl = settings.llm.ollamaUrl.replace(/\/+$/, '')
+    const response = await fetch(`${ollamaUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gemma4:e4b',
+        model: settings.llm.model,
         messages,
         stream: true,
         think: true,
@@ -527,6 +586,17 @@ ipcMain.on('llm:stop', () => {
   if (currentLlmAbort) {
     currentLlmAbort.abort()
     currentLlmAbort = null
+  }
+})
+
+ipcMain.handle('llm:check', async (): Promise<{ connected: boolean }> => {
+  try {
+    const settings = await loadSettings()
+    const ollamaUrl = settings.llm.ollamaUrl.replace(/\/+$/, '')
+    const response = await fetch(`${ollamaUrl}/api/tags`, { method: 'GET' })
+    return { connected: response.ok }
+  } catch {
+    return { connected: false }
   }
 })
 

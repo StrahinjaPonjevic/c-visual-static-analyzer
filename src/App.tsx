@@ -12,8 +12,11 @@ import { SidePanel } from "@/components/SidePanel"
 import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
+import { SettingsDialog } from "@/components/SettingsDialog"
 import type { CodeMarker, CppcheckIssue } from "@/types"
 import { computeMarkers } from "@/analysis/markers"
+import type { AppSettings } from "@/types/settings"
+import { DEFAULT_SETTINGS } from "@/types/settings"
 
 export interface Message {
   id: number
@@ -58,6 +61,33 @@ function App() {
     })
   }, [])
 
+  // ---- Cppcheck detection ----
+  const [cppcheckDetected, setCppcheckDetected] = useState<boolean | undefined>(undefined)
+  const [cppcheckVersion, setCppcheckVersion] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    window.api.checkCppcheck().then(result => {
+      setCppcheckDetected(result.detected)
+      setCppcheckVersion(result.version)
+    })
+  }, [])
+
+  // ---- Settings ----
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  useEffect(() => {
+    window.api.getSettings().then(setSettings)
+  }, [])
+
+  const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
+    setSettings(newSettings)
+    const result = await window.api.saveSettings(newSettings)
+    if (!result.success) {
+      console.error("Failed to save settings:", result.error)
+    }
+  }, [])
+
   // ---- Analysis results & markers ----
   const [cppcheckIssues, setCppcheckIssues] = useState<CppcheckIssue[]>([])
   const [gccErrors, setGccErrors] = useState<GccError[]>([])
@@ -88,18 +118,23 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (!settings.cppcheck.autoAnalyze) {
+      setCppcheckIssues([])
+      return
+    }
+
     if (cppcheckTimeoutRef.current) {
       clearTimeout(cppcheckTimeoutRef.current)
     }
     cppcheckTimeoutRef.current = setTimeout(() => {
       runCppcheck(code)
-    }, 600)
+    }, settings.cppcheck.debounceMs)
     return () => {
       if (cppcheckTimeoutRef.current) {
         clearTimeout(cppcheckTimeoutRef.current)
       }
     }
-  }, [code, runCppcheck])
+  }, [code, runCppcheck, settings.cppcheck.autoAnalyze, settings.cppcheck.debounceMs])
 
   const handleRefreshCppcheck = useCallback(() => {
     if (cppcheckTimeoutRef.current) clearTimeout(cppcheckTimeoutRef.current)
@@ -613,6 +648,7 @@ function App() {
           onStop={handleStop}
           isRunning={isRunning}
           isCompiling={isCompiling}
+          onSettings={() => setSettingsOpen(true)}
         />
 
         <ResizablePanelGroup orientation="horizontal" className="flex-1">
@@ -627,6 +663,9 @@ function App() {
                     setCursorColumn(column)
                   }}
                   markers={markers}
+                  fontSize={settings.editor.fontSize}
+                  tabSize={settings.editor.tabSize}
+                  wordWrap={settings.editor.wordWrap}
                 />
               </ResizablePanel>
               <ResizableHandle withHandle />
@@ -664,7 +703,7 @@ function App() {
           )}
         </ResizablePanelGroup>
 
-        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} gccDetected={gccDetected} gccVersion={gccVersion} />
+        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} gccDetected={gccDetected} gccVersion={gccVersion} cppcheckDetected={cppcheckDetected} cppcheckVersion={cppcheckVersion} />
 
         <UnsavedChangesDialog
           open={showUnsavedDialog}
@@ -672,6 +711,13 @@ function App() {
           onSave={() => handleUnsavedDialogClose('save')}
           onDiscard={() => handleUnsavedDialogClose('discard')}
           onCancel={() => handleUnsavedDialogClose('cancel')}
+        />
+
+        <SettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          settings={settings}
+          onSave={handleSaveSettings}
         />
       </div>
     </TooltipProvider>

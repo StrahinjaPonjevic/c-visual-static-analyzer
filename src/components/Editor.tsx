@@ -7,9 +7,12 @@ type Props = {
     onChange: (value: string) => void
     onCursorChange?: (line: number, column: number) => void
     markers?: CodeMarker[]
+    fontSize?: number
+    tabSize?: number
+    wordWrap?: 'off' | 'on'
 }
 
-export default function Editor({ value, onChange, onCursorChange, markers }: Props) {
+export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off' }: Props) {
     const [editorInstance, setEditorInstance] = useState<unknown>(null)
     const decorationIdsRef = useRef<string[]>([])
 
@@ -56,7 +59,7 @@ export default function Editor({ value, onChange, onCursorChange, markers }: Pro
             value={value}
             onChange={(v) => onChange(v ?? '')}
             theme='vs-dark'
-            options={{ fontSize: 14, minimap: { enabled: false } }}
+            options={{ fontSize, tabSize, wordWrap, minimap: { enabled: false } }}
             onMount={handleEditorMount}
         />
     )

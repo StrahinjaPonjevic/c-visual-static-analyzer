@@ -44,6 +44,7 @@ interface Window {
 
         // GCC check, compile & run
         checkGcc: () => Promise<{ detected: boolean; version?: string }>
+        checkCppcheck: () => Promise<{ detected: boolean; version?: string }>
         compileCode: (code: string) => Promise<GccResult>
         runProgram: (exePath: string) => Promise<{ success: boolean; error?: string }>
         sendStdin: (data: string) => Promise<{ success: boolean; error?: string }>
@@ -56,8 +57,13 @@ interface Window {
         // Ollama LLM (streaming)
         sendChatMessage: (messages: { role: string; content: string }[]) => void
         stopGeneration: () => void
+        checkLlm: () => Promise<{ connected: boolean }>
         onLlmChunk: (callback: (data: { content: string; role: string }) => void) => () => void
         onLlmDone: (callback: () => void) => () => void
         onLlmError: (callback: (error: string) => void) => () => void
+
+        // Settings
+        getSettings: () => Promise<import('./types/settings').AppSettings>
+        saveSettings: (settings: import('./types/settings').AppSettings) => Promise<{ success: boolean; error?: string }>
     }
 }

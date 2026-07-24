@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // GCC check, compile & run
     checkGcc: () => ipcRenderer.invoke('gcc:check') as Promise<{ detected: boolean; version?: string }>,
+    checkCppcheck: () => ipcRenderer.invoke('cppcheck:check') as Promise<{ detected: boolean; version?: string }>,
     compileCode: (code: string) => ipcRenderer.invoke('gcc:compile', code) as Promise<GccResult>,
     runProgram: (exePath: string) => ipcRenderer.invoke('program:run', exePath) as Promise<{ success: boolean; error?: string }>,
     sendStdin: (data: string) => ipcRenderer.invoke('program:stdin', data) as Promise<{ success: boolean; error?: string }>,
@@ -79,6 +80,7 @@ contextBridge.exposeInMainWorld('api', {
     sendChatMessage: (messages: { role: string; content: string }[]) =>
         ipcRenderer.send('llm:chat', messages),
     stopGeneration: () => ipcRenderer.send('llm:stop'),
+    checkLlm: () => ipcRenderer.invoke('llm:check') as Promise<{ connected: boolean }>,
     onLlmChunk: (callback: (data: { content: string; role: string }) => void) => {
         const handler = (_event: Electron.IpcRendererEvent, data: { content: string; role: string }) => callback(data)
         ipcRenderer.on('llm:chunk', handler)
@@ -94,4 +96,8 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('llm:error', handler)
         return () => ipcRenderer.removeListener('llm:error', handler)
     },
+
+    // Settings
+    getSettings: () => ipcRenderer.invoke('settings:get'),
+    saveSettings: (settings: unknown) => ipcRenderer.invoke('settings:save', settings),
 })
