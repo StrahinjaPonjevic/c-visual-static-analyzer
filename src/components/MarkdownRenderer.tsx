@@ -13,13 +13,13 @@ const components: Components = {
 
     if (isBlock) {
       return (
-        <div className="relative my-2 min-w-0">
+        <div className="relative my-2 min-w-0 overflow-x-hidden">
           {match && (
             <span className="absolute right-2 top-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               {match[1]}
             </span>
           )}
-          <pre className="overflow-x-auto rounded-md bg-[#1a1a2e] p-3 text-sm leading-relaxed">
+          <pre className="max-w-full overflow-x-auto rounded-md bg-[#1a1a2e] p-3 text-sm leading-relaxed break-normal">
             <code className={className} {...props}>
               {children}
             </code>

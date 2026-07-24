@@ -79,6 +79,26 @@
   display: none;
 }
 
+/* Show horizontal scrollbar on code blocks inside AI chat */
+[data-radix-scroll-area-viewport] pre::-webkit-scrollbar {
+  display: block;
+  height: 6px;
+}
+[data-radix-scroll-area-viewport] pre::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 3px;
+}
+[data-radix-scroll-area-viewport] pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Override Radix ScrollArea Viewport inner div display:table which causes content to expand beyond panel */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
 /* Code marker decorations for Monaco Editor */
 .marker-error {
   background: rgba(239, 68, 68, 0.12);
