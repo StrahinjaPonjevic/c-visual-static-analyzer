@@ -98,21 +98,26 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
   })
 
   useEffect(() => {
+    let mounted = true
     if (open) {
       setLocal(settings)
       setCppcheckStatus("loading")
       setOllamaStatus("loading")
 
       window.api.checkCppcheck().then((r) => {
+        if (!mounted) return
         setCppcheckStatus(r.detected ? "ok" : "missing")
         setCppcheckVersion(r.version ?? "")
       })
 
       window.api.checkLlm().then((r) => {
+        if (!mounted) return
         setOllamaStatus(r.connected ? "ok" : "missing")
       })
     }
-  }, [open, settings])
+    return () => { mounted = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function update<K extends keyof AppSettings>(
     section: K,

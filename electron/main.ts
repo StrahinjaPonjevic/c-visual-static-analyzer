@@ -9,6 +9,10 @@ import { loadSettings, saveSettings, DEFAULTS, type AppSettings } from './settin
 
 const execFileAsync = promisify(execFile)
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason)
+})
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 interface CppcheckError {
@@ -565,18 +569,24 @@ ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
         }
       }
     } finally {
-      reader.cancel()
+      try { reader.cancel() } catch { /* ignore */ }
     }
 
-    win.webContents.send('llm:done')
+    try {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('llm:done')
+      }
+    } catch { /* ignore */ }
   } catch (err) {
     if (abort.signal.aborted) return
     const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
-      win.webContents.send('llm:error', 'Ollama nije pokrenuta. Pokrenite "ollama serve" ili Ollama aplikaciju.')
-    } else {
-      win.webContents.send('llm:error', msg)
-    }
+    try {
+      if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
+        win.webContents.send('llm:error', 'Ollama nije pokrenuta. Pokrenite "ollama serve" ili Ollama aplikaciju.')
+      } else {
+        win.webContents.send('llm:error', msg)
+      }
+    } catch { /* ignore */ }
   } finally {
     currentLlmAbort = null
   }
@@ -593,7 +603,10 @@ ipcMain.handle('llm:check', async (): Promise<{ connected: boolean }> => {
   try {
     const settings = await loadSettings()
     const ollamaUrl = settings.llm.ollamaUrl.replace(/\/+$/, '')
-    const response = await fetch(`${ollamaUrl}/api/tags`, { method: 'GET' })
+    const response = await fetch(`${ollamaUrl}/api/tags`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000),
+    })
     return { connected: response.ok }
   } catch {
     return { connected: false }
