@@ -1,21 +1,5 @@
 /// <reference types="vite/client" />
 
-interface GccError {
-  line: number
-  column: number
-  type: 'error' | 'warning'
-  message: string
-}
-
-interface GccResult {
-  success: boolean
-  errors: GccError[]
-  stdout: string
-  stderr: string
-  exePath?: string
-  error?: string
-}
-
 interface Window {
     api: {
         openFile: () => Promise<{ filePath: string; content: string } | null>
@@ -45,7 +29,7 @@ interface Window {
         // GCC check, compile & run
         checkGcc: () => Promise<{ detected: boolean; version?: string }>
         checkCppcheck: () => Promise<{ detected: boolean; version?: string }>
-        compileCode: (code: string) => Promise<GccResult>
+        compileCode: (code: string) => Promise<import('./types').GccResult>
         runProgram: (exePath: string) => Promise<{ success: boolean; error?: string }>
         sendStdin: (data: string) => Promise<{ success: boolean; error?: string }>
         killProgram: () => Promise<{ success: boolean; error?: string }>

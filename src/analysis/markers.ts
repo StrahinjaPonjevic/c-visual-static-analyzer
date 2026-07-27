@@ -1,4 +1,4 @@
-import type { CodeMarker, CppcheckIssue } from '@/types'
+import type { CodeMarker, CppcheckIssue, GccError } from '@/types'
 import { stripCommentsAndStrings } from '@/lib/utils'
 
 function mapCppcheckSeverity(severity: CppcheckIssue['severity']): CodeMarker['severity'] {

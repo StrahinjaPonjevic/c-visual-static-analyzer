@@ -1,20 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron"
-
-export interface GccError {
-  line: number
-  column: number
-  type: 'error' | 'warning'
-  message: string
-}
-
-export interface GccResult {
-  success: boolean
-  errors: GccError[]
-  stdout: string
-  stderr: string
-  exePath?: string
-  error?: string
-}
+import type { GccResult } from '../src/types'
 
 contextBridge.exposeInMainWorld('api', {
     openFile: () => ipcRenderer.invoke('file:open'),

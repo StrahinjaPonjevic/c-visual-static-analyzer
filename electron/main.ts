@@ -6,6 +6,8 @@ import fs from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { loadSettings, saveSettings, DEFAULTS, type AppSettings } from './settings'
+import type { GccError, CppcheckIssue } from '../src/types'
+import { parseCppcheckXml, parseGccErrors, injectUnbuffer } from '../src/analysis/parsers'
 
 const execFileAsync = promisify(execFile)
 
@@ -15,57 +17,10 @@ process.on('unhandledRejection', (reason) => {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-interface CppcheckError {
-  id: string
-  severity: 'error' | 'warning' | 'style' | 'performance' | 'information' | 'portability'
-  message: string
-  line: number
-  column: number
-  cwe?: number
-}
-
 interface CppcheckResult {
-  issues: CppcheckError[]
+  issues: CppcheckIssue[]
   success: boolean
   error?: string
-}
-
-function parseCppcheckXml(xml: string): CppcheckError[] {
-  const issues: CppcheckError[] = []
-
-  const errorRegex = /<error\s+id="([^"]*)"\s+severity="([^"]*)"\s+msg="([^"]*)"(?:[^>]*)>([\s\S]*?)<\/error>/g
-  let match: RegExpExecArray | null
-
-  while ((match = errorRegex.exec(xml)) !== null) {
-    const id = match[1]
-    const severity = match[2] as CppcheckError['severity']
-    const message = match[3]
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'")
-      .replace(/&amp;/g, '&')
-
-    if (id === 'missingIncludeSystem' || id === 'checkersReport') continue
-
-    const innerContent = match[4]
-    const locationMatch = innerContent.match(/<location\s+file="([^"]*)"\s+line="(\d+)"(?:\s+column="(\d+)")?/)
-    if (locationMatch) {
-      const line = parseInt(locationMatch[2], 10) || 0
-      const column = parseInt(locationMatch[3] || '0', 10) || 0
-      const cweMatch = match[0].match(/cwe="(\d+)"/)
-      issues.push({
-        id,
-        severity,
-        message,
-        line,
-        column,
-        cwe: cweMatch ? parseInt(cweMatch[1], 10) : undefined,
-      })
-    }
-  }
-
-  return issues
 }
 
 process.env.APP_ROOT = path.join(__dirname, '..')
@@ -91,6 +46,12 @@ ipcMain.handle('file:open', async () => {
 })
 
 ipcMain.handle('file:save', async (_event, filePath: string, content: string) => {
+  if (!filePath || typeof filePath !== 'string') {
+    return { success: false, error: 'Invalid file path' }
+  }
+  if (typeof content !== 'string') {
+    return { success: false, error: 'Invalid content' }
+  }
   try {
     await fs.writeFile(filePath, content, 'utf-8')
     return { success: true }
@@ -109,6 +70,12 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
 })
 
 ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<CppcheckResult> => {
+  if (typeof code !== 'string') {
+    return { issues: [], success: false, error: 'Invalid input' }
+  }
+  if (code.length > 1024 * 1024) {
+    return { issues: [], success: false, error: 'Code exceeds maximum size (1MB)' }
+  }
   let tempFile: string | null = null
   try {
     const settings = await loadSettings().catch(() => null)
@@ -217,43 +184,6 @@ ipcMain.handle('gcc:check', async (): Promise<{ detected: boolean; version?: str
 })
 
 // ---- GCC compilation ----
-
-interface GccError {
-  line: number
-  column: number
-  type: 'error' | 'warning'
-  message: string
-}
-
-const gccErrorRegex = /^(?:[a-zA-Z]:)?[^:]+:(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
-
-function parseGccErrors(stderr: string): GccError[] {
-  const errors: GccError[] = []
-  let match: RegExpExecArray | null
-  while ((match = gccErrorRegex.exec(stderr)) !== null) {
-    errors.push({
-      line: parseInt(match[1], 10),
-      column: parseInt(match[2], 10),
-      type: match[3] as 'error' | 'warning',
-      message: match[4],
-    })
-  }
-  return errors
-}
-
-function injectUnbuffer(code: string): string {
-  const hasStdioH = /#include\s*<stdio\.h>/.test(code)
-  const preamble = hasStdioH ? '' : '#include <stdio.h>\n'
-
-  const mainRegex = /(int\s+)?main\s*\([\s\S]*?\)\s*\{/
-  const match = code.match(mainRegex)
-  if (!match) return preamble + code
-
-  const braceIndex = match.index! + match[0].length
-  const before = code.slice(0, braceIndex)
-  const after = code.slice(braceIndex)
-  return preamble + before + '\n' + '  setvbuf(stdout, NULL, _IONBF, 0);\n  setvbuf(stderr, NULL, _IONBF, 0);\n' + after
-}
 
 ipcMain.handle('gcc:compile', async (_event, code: string) => {
   const tempDir = os.tmpdir()
@@ -454,6 +384,15 @@ interface LlmMessage {
   content: string
 }
 
+function isValidOllamaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 let currentLlmAbort: AbortController | null = null
 
 ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
@@ -478,6 +417,10 @@ ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
 
   try {
     const ollamaUrl = settings.llm.ollamaUrl.replace(/\/+$/, '')
+    if (!isValidOllamaUrl(ollamaUrl)) {
+      win.webContents.send('llm:error', 'Neispravna Ollama URL adresa.')
+      return
+    }
     const response = await fetch(`${ollamaUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -603,6 +546,9 @@ ipcMain.handle('llm:check', async (): Promise<{ connected: boolean }> => {
   try {
     const settings = await loadSettings()
     const ollamaUrl = settings.llm.ollamaUrl.replace(/\/+$/, '')
+    if (!isValidOllamaUrl(ollamaUrl)) {
+      return { connected: false }
+    }
     const response = await fetch(`${ollamaUrl}/api/tags`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),

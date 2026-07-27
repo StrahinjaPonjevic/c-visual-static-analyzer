@@ -16,6 +16,7 @@ import { SettingsDialog } from "@/components/SettingsDialog"
 import type { CodeMarker, CppcheckIssue } from "@/types"
 import { computeMarkers } from "@/analysis/markers"
 import type { AppSettings } from "@/types/settings"
+import type { GccError } from "@/types"
 import { DEFAULT_SETTINGS } from "@/types/settings"
 
 export interface Message {
@@ -270,6 +271,8 @@ function App() {
 
     for (const msg of messages) {
       if (msg.id === 1) continue
+      if (msg.isStreaming) continue
+      if (!msg.content) continue
       apiMessages.push({ role: msg.role, content: msg.content })
     }
 
