@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useMemo } from "react"
 import {
   AlertTriangle,
   CheckCircle,
@@ -127,15 +127,7 @@ function getSeverityIcon(severity: CppcheckIssue["severity"]) {
 }
 
 export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefreshCppcheck }: StaticAnalysisPanelProps) {
-  const [metrics, setMetrics] = useState<CodeMetrics>({
-    lines: 0, totalLines: 0, functions: 0, ifStatements: 0, loops: 0,
-    arrays: 0, pointers: 0, structs: 0, mallocCalls: 0, freeCalls: 0, includes: 0, comments: 0,
-  })
-
-  useEffect(() => {
-    const computed = computeMetrics(code)
-    setMetrics(computed)
-  }, [code])
+  const metrics = useMemo(() => computeMetrics(code), [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
   const [issuesOpen, setIssuesOpen] = useState(true)

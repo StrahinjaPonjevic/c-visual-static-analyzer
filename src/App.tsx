@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -92,11 +92,11 @@ function App() {
   // ---- Analysis results & markers ----
   const [cppcheckIssues, setCppcheckIssues] = useState<CppcheckIssue[]>([])
   const [gccErrors, setGccErrors] = useState<GccError[]>([])
-  const [markers, setMarkers] = useState<CodeMarker[]>([])
 
-  useEffect(() => {
-    setMarkers(computeMarkers(code, cppcheckIssues, gccErrors))
-  }, [code, cppcheckIssues, gccErrors])
+  const markers = useMemo(
+    () => computeMarkers(code, cppcheckIssues, gccErrors),
+    [code, cppcheckIssues, gccErrors],
+  )
 
   // ---- Cppcheck auto-trigger ----
   const [isAnalyzing, setIsAnalyzing] = useState(false)
