@@ -32,6 +32,37 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 
 let win: BrowserWindow | null
 let isClosing = false
+let watchTimer: ReturnType<typeof setInterval> | null = null
+let watchedFilePath: string | null = null
+let lastSavedContent: string | null = null
+
+function stopWatching() {
+  if (watchTimer) {
+    clearInterval(watchTimer)
+    watchTimer = null
+  }
+  watchedFilePath = null
+}
+
+function startWatching(filePath: string) {
+  if (!filePath) return
+  if (filePath === watchedFilePath) return
+  stopWatching()
+  watchedFilePath = filePath
+  watchTimer = setInterval(async () => {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      if (content === lastSavedContent) return
+      lastSavedContent = content
+      const browserWin = BrowserWindow.getAllWindows()[0]
+      if (browserWin && !browserWin.isDestroyed()) {
+        browserWin.webContents.send('file:externally-changed', { filePath, content })
+      }
+    } catch {
+      // file may have been deleted or not yet accessible
+    }
+  }, 1000)
+}
 
 ipcMain.handle('file:open', async () => {
   const result = await dialog.showOpenDialog({
@@ -41,6 +72,8 @@ ipcMain.handle('file:open', async () => {
   if (result.canceled) return null
   const filePath = result.filePaths[0]
   const content = await fs.readFile(filePath, 'utf-8')
+  lastSavedContent = content
+  startWatching(filePath)
 
   return { filePath, content }
 })
@@ -54,6 +87,8 @@ ipcMain.handle('file:save', async (_event, filePath: string, content: string) =>
   }
   try {
     await fs.writeFile(filePath, content, 'utf-8')
+    lastSavedContent = content
+    startWatching(filePath)
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) }
@@ -66,6 +101,8 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
   })
   if (result.canceled) return null
   await fs.writeFile(result.filePath, content, 'utf-8')
+  lastSavedContent = content
+  startWatching(result.filePath)
   return result.filePath
 })
 
@@ -667,6 +704,7 @@ function createWindow() {
 
 app.on('window-all-closed', () => {
   cleanupRunningProcess()
+  stopWatching()
   if (process.platform !== 'darwin') {
     app.quit()
     win = null

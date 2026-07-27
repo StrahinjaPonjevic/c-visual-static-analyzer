@@ -6,6 +6,7 @@ interface Window {
         saveFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
         onMenuOpen: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
+        onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => () => void
         saveAsFile: (content: string) => Promise<string | null>
         analyzeCode: (code: string) => Promise<{
             issues: {

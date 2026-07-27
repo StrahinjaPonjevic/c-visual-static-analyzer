@@ -16,6 +16,11 @@ contextBridge.exposeInMainWorld('api', {
         return () => ipcRenderer.removeListener('menu:save-file', handler)
     },
     saveAsFile: (content: string) => ipcRenderer.invoke('file:save-as', content),
+    onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => {
+        const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; content: string }) => callback(data)
+        ipcRenderer.on('file:externally-changed', handler)
+        return () => ipcRenderer.removeListener('file:externally-changed', handler)
+    },
     analyzeCode: (code: string) => ipcRenderer.invoke('cppcheck:analyze', code),
     minimizeWindow: () => ipcRenderer.send('window:minimize'),
     maximizeWindow: () => ipcRenderer.send('window:maximize'),

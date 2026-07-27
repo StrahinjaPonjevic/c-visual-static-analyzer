@@ -76,7 +76,7 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         <MonacoEditor
             height="100%"
             language='c'
-            defaultValue={value}
+            value={value}
             onChange={handleChange}
             theme='vs-dark'
             options={{ fontSize, tabSize, wordWrap, minimap: { enabled: false } }}

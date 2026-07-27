@@ -13,7 +13,16 @@ import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
 import { SettingsDialog } from "@/components/SettingsDialog"
-import type { CodeMarker, CppcheckIssue } from "@/types"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import type { CppcheckIssue } from "@/types"
 import { computeMarkers } from "@/analysis/markers"
 import type { AppSettings } from "@/types/settings"
 import type { GccError } from "@/types"
@@ -45,11 +54,14 @@ function App() {
   const [cursorColumn, setCursorColumn] = useState(1)
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
-  const savedCodeRef = useRef(code)
+  const [externalChangeData, setExternalChangeData] = useState<{ filePath: string; content: string; fileName: string } | null>(null)
+  const [savedCode, setSavedCode] = useState(code)
   const codeRef = useRef(code)
   codeRef.current = code
 
-  const isDirty = code !== savedCodeRef.current
+  const isDirty = code !== savedCode
+  const isDirtyRef = useRef(isDirty)
+  isDirtyRef.current = isDirty
 
   // ---- GCC detection ----
   const [gccDetected, setGccDetected] = useState<boolean | undefined>(undefined)
@@ -337,12 +349,12 @@ function App() {
     const latestCode = codeRef.current
     if (currentFilePath) {
       const result = await window.api.saveFile(currentFilePath, latestCode)
-      if (result.success) savedCodeRef.current = latestCode
+      if (result.success) setSavedCode(latestCode)
     } else {
       const newPath = await window.api.saveAsFile(latestCode)
       if (newPath) {
         setCurrentFilePath(newPath)
-        savedCodeRef.current = latestCode
+        setSavedCode(latestCode)
       }
     }
   }, [currentFilePath])
@@ -356,19 +368,19 @@ function App() {
             handleSave().then(() => {
               setCode("")
               setCurrentFilePath(null)
-              savedCodeRef.current = ""
+              setSavedCode("")
             })
           } else if (action === 'discard') {
             setCode("")
               setCurrentFilePath(null)
-              savedCodeRef.current = ""
+              setSavedCode("")
           }
         }
       })
     } else {
       setCode("")
       setCurrentFilePath(null)
-      savedCodeRef.current = ""
+      setSavedCode("")
     }
   }, [isDirty, handleSave])
 
@@ -385,7 +397,7 @@ function App() {
             if (result) {
               setCode(result.content)
               setCurrentFilePath(result.filePath)
-              savedCodeRef.current = result.content
+              setSavedCode(result.content)
             }
           }
         }
@@ -395,7 +407,7 @@ function App() {
       if (result) {
         setCode(result.content)
         setCurrentFilePath(result.filePath)
-        savedCodeRef.current = result.content
+        setSavedCode(result.content)
       }
     }
   }, [isDirty, handleSave])
@@ -433,15 +445,19 @@ function App() {
   }, [handleSave])
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
-        e.preventDefault()
-        handleSave()
+    const cleanup = window.api.onFileExternallyChanged(({ filePath, content }) => {
+      if (currentFilePath !== filePath) return
+      if (codeRef.current === content) return
+      if (!isDirtyRef.current) {
+        setCode(content)
+        setSavedCode(content)
+      } else {
+        const parts = filePath.split(/[/\\]/)
+        setExternalChangeData({ filePath, content, fileName: parts[parts.length - 1] })
       }
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [handleSave])
+    })
+    return cleanup
+  }, [currentFilePath])
 
   const handleClose = useCallback(() => {
     if (isDirty) {
@@ -631,6 +647,14 @@ function App() {
     savedAction?.resolve(action)
   }, [unsavedAction])
 
+  const handleReloadExternal = useCallback(() => {
+    if (externalChangeData) {
+      setCode(externalChangeData.content)
+      setSavedCode(externalChangeData.content)
+      setExternalChangeData(null)
+    }
+  }, [externalChangeData])
+
   const fileName = currentFilePath
     ? currentFilePath.split(/[/\\]/).pop() ?? null
     : null
@@ -715,6 +739,26 @@ function App() {
           onDiscard={() => handleUnsavedDialogClose('discard')}
           onCancel={() => handleUnsavedDialogClose('cancel')}
         />
+
+        <Dialog open={externalChangeData !== null} onOpenChange={() => setExternalChangeData(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Fajl promenjen spolja</DialogTitle>
+              <DialogDescription>
+                Fajl "{externalChangeData?.fileName}" je promenjen od strane drugog programa.
+                {isDirty ? " Imate nesnimljene promene. Želiš li da učitaš novu verziju? (Nesnimljene promene biće izgubljene)" : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setExternalChangeData(null)}>
+                Zadrži moju verziju
+              </Button>
+              <Button onClick={handleReloadExternal}>
+                Učitaj novu verziju
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <SettingsDialog
           open={settingsOpen}
