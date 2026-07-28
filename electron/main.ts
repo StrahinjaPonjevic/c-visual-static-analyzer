@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import fs from 'node:fs/promises'
+import fsSync from 'node:fs'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { loadSettings, saveSettings, DEFAULTS, type AppSettings } from './settings'
@@ -16,6 +17,24 @@ process.on('unhandledRejection', (reason) => {
 })
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Validate path is safe (prevents path traversal attacks)
+function isPathSafe(filePath: string): boolean {
+  try {
+    const normalized = path.resolve(filePath)
+    // Block path traversal - if normalized differs, path had .. or similar
+    if (normalized !== path.normalize(filePath)) {
+      return false
+    }
+    // Ensure it's an absolute path
+    if (!path.isAbsolute(normalized)) {
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
 
 interface CppcheckResult {
   issues: CppcheckIssue[]
@@ -35,6 +54,7 @@ let isClosing = false
 let watchTimer: ReturnType<typeof setInterval> | null = null
 let watchedFilePath: string | null = null
 let lastSavedContent: string | null = null
+const tempFiles = new Set<string>()
 
 function stopWatching() {
   if (watchTimer) {
@@ -71,6 +91,10 @@ ipcMain.handle('file:open', async () => {
 
   if (result.canceled) return null
   const filePath = result.filePaths[0]
+  // Validate path is safe
+  if (!isPathSafe(filePath)) {
+    return null
+  }
   const content = await fs.readFile(filePath, 'utf-8')
   lastSavedContent = content
   startWatching(filePath)
@@ -84,6 +108,10 @@ ipcMain.handle('file:save', async (_event, filePath: string, content: string) =>
   }
   if (typeof content !== 'string') {
     return { success: false, error: 'Invalid content' }
+  }
+  // Validate path is safe
+  if (!isPathSafe(filePath)) {
+    return { success: false, error: 'Invalid file path' }
   }
   try {
     await fs.writeFile(filePath, content, 'utf-8')
@@ -100,6 +128,10 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
     filters: [{ name: 'C fajlovi', extensions: ['c', 'h'] }],
   })
   if (result.canceled) return null
+  // Validate path is safe
+  if (!isPathSafe(result.filePath)) {
+    return null
+  }
   await fs.writeFile(result.filePath, content, 'utf-8')
   lastSavedContent = content
   startWatching(result.filePath)
@@ -113,6 +145,10 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
   if (code.length > 1024 * 1024) {
     return { issues: [], success: false, error: 'Code exceeds maximum size (1MB)' }
   }
+  // Reject null bytes
+  if (code.includes('\0')) {
+    return { issues: [], success: false, error: 'Invalid input: null bytes not allowed' }
+  }
   let tempFile: string | null = null
   try {
     const settings = await loadSettings().catch(() => null)
@@ -123,6 +159,7 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
 
     const tempDir = os.tmpdir()
     tempFile = path.join(tempDir, `cppcheck_${Date.now()}.c`)
+    tempFiles.add(tempFile)
     await fs.writeFile(tempFile, code, 'utf-8')
 
     const cppcheckExe = process.platform === 'win32' ? 'cppcheck.exe' : 'cppcheck'
@@ -168,6 +205,7 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
     }
   } finally {
     if (tempFile) {
+      tempFiles.delete(tempFile)
       try {
         await fs.unlink(tempFile)
       } catch {
@@ -227,6 +265,8 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
   const timestamp = Date.now()
   const cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
   const exePath = path.join(tempDir, process.platform === 'win32' ? `gcc_${timestamp}.exe` : `gcc_${timestamp}`)
+  tempFiles.add(cFilePath)
+  tempFiles.add(exePath)
 
   let settings: AppSettings
   try {
@@ -316,6 +356,7 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
       stdout: '', stderr: '',
     }
   } finally {
+    tempFiles.delete(cFilePath)
     try { await fs.unlink(cFilePath) } catch { /* ignore */ }
   }
 })
@@ -327,6 +368,7 @@ let runningExePath: string | null = null
 
 async function cleanupExe(exePath: string | null) {
   if (!exePath) return
+  tempFiles.delete(exePath)
   try {
     await fs.unlink(exePath)
   } catch {
@@ -424,7 +466,26 @@ interface LlmMessage {
 function isValidOllamaUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false
+    }
+    const hostname = parsed.hostname
+    // Allow only localhost and loopback addresses
+    const allowedHosts = ['localhost', '127.0.0.1', '::1', '[::1]']
+    if (allowedHosts.includes(hostname)) {
+      return true
+    }
+    // Reject private IP ranges
+    const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+    const match = hostname.match(ipRegex)
+    if (match) {
+      const [, a, b] = match.map(Number)
+      // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+        return false
+      }
+    }
+    return false
   } catch {
     return false
   }
@@ -676,6 +737,9 @@ function createWindow() {
     titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   })
 
@@ -718,3 +782,32 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(createWindow)
+
+// Cleanup temp files on exit
+async function cleanupTempFiles() {
+  for (const file of tempFiles) {
+    try {
+      await fs.unlink(file)
+    } catch {
+      // ignore
+    }
+  }
+  tempFiles.clear()
+}
+
+process.on('exit', () => {
+  // Synchronous cleanup attempt
+  for (const file of tempFiles) {
+    try {
+      fsSync.rmSync(file, { force: true })
+    } catch {
+      // ignore
+    }
+  }
+})
+
+app.on('will-quit', async (e) => {
+  e.preventDefault()
+  await cleanupTempFiles()
+  app.quit()
+})
