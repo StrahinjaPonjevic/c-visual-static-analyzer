@@ -13,6 +13,8 @@ import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
 import { SettingsDialog } from "@/components/SettingsDialog"
+import { FileExplorer } from "@/components/FileExplorer"
+import { TabBar } from "@/components/TabBar"
 import {
   Dialog,
   DialogContent,
@@ -22,10 +24,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import type { CppcheckIssue } from "@/types"
+import type { CppcheckIssue, GccError, GccResult } from "@/types"
+import type { FileNode } from "@/types/project"
 import { computeMarkers } from "@/analysis/markers"
 import type { AppSettings } from "@/types/settings"
-import type { GccError } from "@/types"
 import { DEFAULT_SETTINGS } from "@/types/settings"
 
 export interface Message {
@@ -45,9 +47,33 @@ const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru des
 
 Odgovaraj kratko i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno. Budi edukativan i strpljiv sa početnicima.`
 
-function App() {
-  const [code, setCode] = useState("// Otvorite C fajl da biste poceli\n")
-  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
+export function App() {
+  const [mode, setMode] = useState<'single' | 'project'>('single')
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+
+  const [projectPath, setProjectPath] = useState<string | null>(null)
+  const projectPathRef = useRef(projectPath)
+  projectPathRef.current = projectPath
+
+  const [projectName, setProjectName] = useState<string | null>(null)
+  const [projectTree, setProjectTree] = useState<FileNode[]>([])
+
+  const [showExplorer, setShowExplorer] = useState(true)
+
+  const [openFilePaths, setOpenFilePaths] = useState<string[]>([])
+  const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
+  const activeFilePathRef = useRef(activeFilePath)
+  activeFilePathRef.current = activeFilePath
+
+  const [fileContents, setFileContents] = useState<Record<string, { content: string; savedContent: string }>>({})
+  const fileContentsRef = useRef(fileContents)
+  fileContentsRef.current = fileContents
+
+  const [code, setCode] = useState("// Otvorite C fajl ili projekat da biste počeli\n")
+  const codeRef = useRef(code)
+  codeRef.current = code
+
   const [showSidePanel, setShowSidePanel] = useState(true)
   const [activeSideTab, setActiveSideTab] = useState<"ai" | "analysis">("analysis")
   const [cursorLine, setCursorLine] = useState(1)
@@ -55,13 +81,21 @@ function App() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
   const [externalChangeData, setExternalChangeData] = useState<{ filePath: string; content: string; fileName: string } | null>(null)
-  const [savedCode, setSavedCode] = useState(code)
-  const codeRef = useRef(code)
-  codeRef.current = code
 
-  const isDirty = code !== savedCode
-  const isDirtyRef = useRef(isDirty)
-  isDirtyRef.current = isDirty
+  const dirtyFiles = useMemo(() => {
+    const dirty = new Set<string>()
+    for (const [path, state] of Object.entries(fileContents)) {
+      if (state.content !== state.savedContent) {
+        dirty.add(path)
+      }
+    }
+    return dirty
+  }, [fileContents])
+
+  const isDirty = useMemo(() => {
+    if (!activeFilePath) return false
+    return dirtyFiles.has(activeFilePath)
+  }, [activeFilePath, dirtyFiles])
 
   // ---- GCC detection ----
   const [gccDetected, setGccDetected] = useState<boolean | undefined>(undefined)
@@ -110,14 +144,55 @@ function App() {
     [code, cppcheckIssues, gccErrors],
   )
 
+  const activeMarkers = useMemo(() => {
+    if (!activeFilePath) return markers
+    return markers.filter((m) => {
+      if (!m.filePath) return true
+      return m.filePath === activeFilePath || activeFilePath.endsWith(m.filePath) || m.filePath.endsWith(activeFilePath.split(/[/\\]/).pop()!)
+    })
+  }, [markers, activeFilePath])
+
+  const fileErrorCounts = useMemo(() => {
+    const counts: Record<string, { errors: number; warnings: number }> = {}
+    for (const issue of cppcheckIssues) {
+      if (!issue.filePath) continue
+      if (!counts[issue.filePath]) counts[issue.filePath] = { errors: 0, warnings: 0 }
+      if (issue.severity === 'error') counts[issue.filePath].errors += 1
+      else counts[issue.filePath].warnings += 1
+    }
+    for (const err of gccErrors) {
+      if (!err.filePath) continue
+      if (!counts[err.filePath]) counts[err.filePath] = { errors: 0, warnings: 0 }
+      if (err.type === 'error') counts[err.filePath].errors += 1
+      else counts[err.filePath].warnings += 1
+    }
+    return counts
+  }, [cppcheckIssues, gccErrors])
+
   // ---- Cppcheck auto-trigger ----
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const cppcheckTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const runCppcheck = useCallback(async (codeToAnalyze: string) => {
+  const runCppcheckSingle = useCallback(async (codeToAnalyze: string) => {
     setIsAnalyzing(true)
     try {
       const result = await window.api.analyzeCode(codeToAnalyze)
+      if (result.success) {
+        setCppcheckIssues(result.issues as CppcheckIssue[])
+      } else {
+        setCppcheckIssues([])
+      }
+    } catch {
+      setCppcheckIssues([])
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }, [])
+
+  const runCppcheckProject = useCallback(async (pPath: string) => {
+    setIsAnalyzing(true)
+    try {
+      const result = await window.api.analyzeProject(pPath)
       if (result.success) {
         setCppcheckIssues(result.issues as CppcheckIssue[])
       } else {
@@ -140,19 +215,27 @@ function App() {
       clearTimeout(cppcheckTimeoutRef.current)
     }
     cppcheckTimeoutRef.current = setTimeout(() => {
-      runCppcheck(code)
+      if (modeRef.current === 'project' && projectPathRef.current) {
+        runCppcheckProject(projectPathRef.current)
+      } else {
+        runCppcheckSingle(code)
+      }
     }, settings.cppcheck.debounceMs)
     return () => {
       if (cppcheckTimeoutRef.current) {
         clearTimeout(cppcheckTimeoutRef.current)
       }
     }
-  }, [code, runCppcheck, settings.cppcheck.autoAnalyze, settings.cppcheck.debounceMs])
+  }, [code, runCppcheckSingle, runCppcheckProject, settings.cppcheck.autoAnalyze, settings.cppcheck.debounceMs])
 
   const handleRefreshCppcheck = useCallback(() => {
     if (cppcheckTimeoutRef.current) clearTimeout(cppcheckTimeoutRef.current)
-    runCppcheck(code)
-  }, [code, runCppcheck])
+    if (modeRef.current === 'project' && projectPathRef.current) {
+      runCppcheckProject(projectPathRef.current)
+    } else {
+      runCppcheckSingle(code)
+    }
+  }, [code, runCppcheckSingle, runCppcheckProject])
 
   // ---- AI Chat state ----
   const [messages, setMessages] = useState<Message[]>([
@@ -274,10 +357,17 @@ function App() {
       { role: "system", content: SYSTEM_PROMPT },
     ]
 
+    if (modeRef.current === 'project' && projectPathRef.current) {
+      apiMessages.push({
+        role: "system",
+        content: `Korisnik radi u Project Mode okruženju. Projekat: ${projectName || projectPathRef.current}. Aktivni fajl: ${activeFilePathRef.current || 'nema'}.`,
+      })
+    }
+
     if (codeRef.current.trim()) {
       apiMessages.push({
         role: "system",
-        content: `Trenutni kod u editoru:\n\`\`\`c\n${codeRef.current}\n\`\`\``,
+        content: `Trenutni kod u editoru (${activeFilePathRef.current || 'fajl'}):\n\`\`\`c\n${codeRef.current}\n\`\`\``,
       })
     }
 
@@ -291,7 +381,7 @@ function App() {
     apiMessages.push({ role: "user", content: aiInput })
 
     window.api.sendChatMessage(apiMessages)
-  }, [aiInput, isAiLoading, messages])
+  }, [aiInput, isAiLoading, messages, projectName])
 
   const handleAiStop = useCallback(() => {
     window.api.stopGeneration()
@@ -343,81 +433,192 @@ function App() {
     }
   }
 
-  const language = getLanguageFromPath(currentFilePath)
+  const language = getLanguageFromPath(activeFilePath)
+
+  // ---- Tab & File Operations ----
+
+  const handleCodeChange = useCallback((newCode: string) => {
+    setCode(newCode)
+    if (activeFilePathRef.current) {
+      const activePath = activeFilePathRef.current
+      setFileContents((prev) => ({
+        ...prev,
+        [activePath]: {
+          content: newCode,
+          savedContent: prev[activePath]?.savedContent ?? '',
+        },
+      }))
+    }
+  }, [])
+
+  const handleSelectFile = useCallback(async (filePath: string) => {
+    if (!openFilePaths.includes(filePath)) {
+      setOpenFilePaths((prev) => [...prev, filePath])
+    }
+
+    if (!fileContentsRef.current[filePath]) {
+      const res = await window.api.readFile(filePath)
+      if (res) {
+        setFileContents((prev) => ({
+          ...prev,
+          [filePath]: { content: res.content, savedContent: res.content },
+        }))
+        setCode(res.content)
+      }
+    } else {
+      setCode(fileContentsRef.current[filePath].content)
+    }
+
+    setActiveFilePath(filePath)
+  }, [openFilePaths])
+
+  const handleCloseTab = useCallback((filePath: string) => {
+    setOpenFilePaths((prev) => {
+      const next = prev.filter((p) => p !== filePath)
+      if (activeFilePathRef.current === filePath) {
+        const nextActive = next[next.length - 1] || null
+        setActiveFilePath(nextActive)
+        if (nextActive && fileContentsRef.current[nextActive]) {
+          setCode(fileContentsRef.current[nextActive].content)
+        } else if (!nextActive) {
+          setCode("// Prazan editor\n")
+        }
+      }
+      return next
+    })
+  }, [])
 
   const handleSave = useCallback(async () => {
     const latestCode = codeRef.current
-    if (currentFilePath) {
-      const result = await window.api.saveFile(currentFilePath, latestCode)
-      if (result.success) setSavedCode(latestCode)
+    const targetPath = activeFilePathRef.current
+    if (targetPath) {
+      const result = await window.api.saveFile(targetPath, latestCode)
+      if (result.success) {
+        setFileContents((prev) => ({
+          ...prev,
+          [targetPath]: { content: latestCode, savedContent: latestCode },
+        }))
+        if (modeRef.current === 'project' && projectPathRef.current) {
+          runCppcheckProject(projectPathRef.current)
+        }
+      }
     } else {
       const newPath = await window.api.saveAsFile(latestCode)
       if (newPath) {
-        setCurrentFilePath(newPath)
-        setSavedCode(latestCode)
+        setActiveFilePath(newPath)
+        setOpenFilePaths([newPath])
+        setFileContents({ [newPath]: { content: latestCode, savedContent: latestCode } })
       }
     }
-  }, [currentFilePath])
+  }, [runCppcheckProject])
 
   const handleNew = useCallback(() => {
-    if (isDirty) {
-      setShowUnsavedDialog(true)
-      setUnsavedAction({
-        resolve: (action) => {
-          if (action === 'save') {
-            handleSave().then(() => {
-              setCode("")
-              setCurrentFilePath(null)
-              setSavedCode("")
-            })
-          } else if (action === 'discard') {
-            setCode("")
-              setCurrentFilePath(null)
-              setSavedCode("")
-          }
-        }
-      })
-    } else {
-      setCode("")
-      setCurrentFilePath(null)
-      setSavedCode("")
-    }
-  }, [isDirty, handleSave])
+    const newUntitledName = `untitled_${Date.now()}.c`
+    setOpenFilePaths((prev) => [...prev, newUntitledName])
+    setFileContents((prev) => ({
+      ...prev,
+      [newUntitledName]: { content: "", savedContent: "" },
+    }))
+    setActiveFilePath(newUntitledName)
+    setCode("")
+  }, [])
 
   const handleOpen = useCallback(async () => {
-    if (isDirty) {
-      setShowUnsavedDialog(true)
-      setUnsavedAction({
-        resolve: async (action) => {
-          if (action === 'save') {
-            await handleSave()
-          }
-          if (action !== 'cancel') {
-            const result = await window.api.openFile()
-            if (result) {
-              setCode(result.content)
-              setCurrentFilePath(result.filePath)
-              setSavedCode(result.content)
-            }
+    const result = await window.api.openFile()
+    if (result) {
+      setFileContents((prev) => ({
+        ...prev,
+        [result.filePath]: { content: result.content, savedContent: result.content },
+      }))
+      setOpenFilePaths((prev) => (prev.includes(result.filePath) ? prev : [...prev, result.filePath]))
+      setActiveFilePath(result.filePath)
+      setCode(result.content)
+    }
+  }, [])
+
+  const handleOpenFolder = useCallback(async () => {
+    const result = await window.api.openFolder()
+    if (result) {
+      setMode('project')
+      setProjectPath(result.folderPath)
+      setProjectName(result.folderName)
+      setProjectTree(result.tree)
+      setShowExplorer(true)
+
+      // Find first .c file to auto-open if available
+      const findFirstCFile = (nodes: FileNode[]): string | null => {
+        for (const n of nodes) {
+          if (!n.isDirectory && (n.extension === '.c' || n.extension === '.h')) return n.path
+          if (n.isDirectory && n.children) {
+            const found = findFirstCFile(n.children)
+            if (found) return found
           }
         }
-      })
-    } else {
-      const result = await window.api.openFile()
-      if (result) {
-        setCode(result.content)
-        setCurrentFilePath(result.filePath)
-        setSavedCode(result.content)
+        return null
+      }
+
+      const firstFile = findFirstCFile(result.tree)
+      if (firstFile) {
+        handleSelectFile(firstFile)
+      }
+
+      runCppcheckProject(result.folderPath)
+    }
+  }, [handleSelectFile, runCppcheckProject])
+
+  const handleRefreshTree = useCallback(async () => {
+    if (projectPathRef.current) {
+      const tree = await window.api.readProjectTree(projectPathRef.current)
+      setProjectTree(tree)
+    }
+  }, [])
+
+  const handleCreateFile = useCallback(async (parentDir: string, fileName: string) => {
+    const targetPath = `${parentDir}/${fileName}`
+    const res = await window.api.createProjectFile(targetPath)
+    if (res.success) {
+      handleRefreshTree()
+      handleSelectFile(targetPath)
+    }
+  }, [handleRefreshTree, handleSelectFile])
+
+  const handleCreateFolder = useCallback(async (parentDir: string, folderName: string) => {
+    const targetPath = `${parentDir}/${folderName}`
+    const res = await window.api.createProjectFolder(targetPath)
+    if (res.success) {
+      handleRefreshTree()
+    }
+  }, [handleRefreshTree])
+
+  const handleRenameItem = useCallback(async (oldPath: string, newPath: string) => {
+    const res = await window.api.renameProjectItem(oldPath, newPath)
+    if (res.success) {
+      handleRefreshTree()
+      if (activeFilePathRef.current === oldPath) {
+        setActiveFilePath(newPath)
       }
     }
-  }, [isDirty, handleSave])
+  }, [handleRefreshTree])
+
+  const handleDeleteItem = useCallback(async (targetPath: string) => {
+    const res = await window.api.deleteProjectItem(targetPath)
+    if (res.success) {
+      handleRefreshTree()
+      handleCloseTab(targetPath)
+    }
+  }, [handleRefreshTree, handleCloseTab])
 
   useEffect(() => {
-    const cleanup = window.api.onMenuOpen(() => {
-      handleOpen()
-    })
-    return cleanup
-  }, [handleOpen])
+    const cleanupOpen = window.api.onMenuOpen(() => handleOpen())
+    const cleanupOpenFolder = window.api.onMenuOpenFolder(() => handleOpenFolder())
+    const cleanupSave = window.api.onMenuSave(() => handleSave())
+
+    return () => {
+      cleanupOpen()
+      cleanupOpenFolder()
+      cleanupSave()
+    }
+  }, [handleOpen, handleOpenFolder, handleSave])
 
   const handleToggleAI = useCallback(() => {
     if (showSidePanel && activeSideTab === "ai") {
@@ -437,30 +638,8 @@ function App() {
     }
   }, [showSidePanel, activeSideTab])
 
-  useEffect(() => {
-    const cleanup = window.api.onMenuSave(() => {
-      handleSave()
-    })
-    return cleanup
-  }, [handleSave])
-
-  useEffect(() => {
-    const cleanup = window.api.onFileExternallyChanged(({ filePath, content }) => {
-      if (currentFilePath !== filePath) return
-      if (codeRef.current === content) return
-      if (!isDirtyRef.current) {
-        setCode(content)
-        setSavedCode(content)
-      } else {
-        const parts = filePath.split(/[/\\]/)
-        setExternalChangeData({ filePath, content, fileName: parts[parts.length - 1] })
-      }
-    })
-    return cleanup
-  }, [currentFilePath])
-
   const handleClose = useCallback(() => {
-    if (isDirty) {
+    if (dirtyFiles.size > 0) {
       setShowUnsavedDialog(true)
       setUnsavedAction({
         resolve: async (action) => {
@@ -475,7 +654,7 @@ function App() {
     } else {
       window.api.forceClose()
     }
-  }, [isDirty, handleSave])
+  }, [dirtyFiles.size, handleSave])
 
   useEffect(() => {
     const cleanup = window.api.onConfirmClose(() => {
@@ -487,23 +666,37 @@ function App() {
   // ---- GCC compile & run handlers ----
 
   const handleRun = useCallback(async () => {
-    if (!codeRef.current.trim() || compilingRef.current) return
+    if (compilingRef.current) return
     compilingRef.current = true
 
     setIsCompiling(true)
     setTerminalOutput([])
     setGccErrors([])
 
-    const id = terminalIdRef.current
-    terminalIdRef.current += 1
-    setTerminalOutput(prev => [...prev, { id, type: "system", text: "$ Kompajliram..." }])
+    setTerminalOutput((prev) => [...prev, { id: terminalIdRef.current++, type: "system", text: "$ Kompajliram..." }])
 
     try {
-      const result = await window.api.compileCode(codeRef.current)
+      let result: GccResult
+      if (modeRef.current === 'project' && projectPathRef.current) {
+        // Save all open dirty files in project before compiling
+        for (const [fPath, fState] of Object.entries(fileContentsRef.current)) {
+          if (fState.content !== fState.savedContent) {
+            await window.api.saveFile(fPath, fState.content)
+            setFileContents((prev) => ({
+              ...prev,
+              [fPath]: { content: fState.content, savedContent: fState.content },
+            }))
+          }
+        }
+        result = await window.api.compileProject(projectPathRef.current)
+      } else {
+        result = await window.api.compileCode(codeRef.current)
+      }
+
       setGccErrors(result.errors)
 
       if (result.error) {
-        setTerminalOutput(prev => [...prev, {
+        setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,
           type: "system",
           text: `Greška: ${result.error}`,
@@ -514,17 +707,17 @@ function App() {
       }
 
       if (result.stderr.trim()) {
-        setTerminalOutput(prev => [...prev, {
+        setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,
           type: "stderr",
           text: result.stderr,
         }])
       } else if (!result.success && result.errors.length > 0) {
-        result.errors.forEach(err => {
-          setTerminalOutput(prev => [...prev, {
+        result.errors.forEach((err) => {
+          setTerminalOutput((prev) => [...prev, {
             id: terminalIdRef.current++,
             type: "stderr",
-            text: `${err.message}\n`,
+            text: `${err.filePath ? err.filePath + ': ' : ''}${err.message}\n`,
           }])
         })
       }
@@ -536,7 +729,7 @@ function App() {
       }
 
       // Kompajliranje uspešno — pokreni program
-      setTerminalOutput(prev => [...prev, {
+      setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
         text: "Kompajliranje uspešno. Pokrećem program...\n",
@@ -546,7 +739,7 @@ function App() {
 
       const runResult = await window.api.runProgram(result.exePath!)
       if (!runResult.success) {
-        setTerminalOutput(prev => [...prev, {
+        setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,
           type: "system",
           text: `Greška pri pokretanju: ${runResult.error}`,
@@ -562,7 +755,7 @@ function App() {
     } catch (err) {
       compilingRef.current = false
       setIsCompiling(false)
-      setTerminalOutput(prev => [...prev, {
+      setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
         text: `Neočekivana greška: ${err instanceof Error ? err.message : String(err)}`,
@@ -573,7 +766,7 @@ function App() {
   const handleStop = useCallback(async () => {
     await window.api.killProgram()
     setIsRunning(false)
-    setTerminalOutput(prev => [...prev, {
+    setTerminalOutput((prev) => [...prev, {
       id: terminalIdRef.current++,
       type: "system",
       text: "Program zaustavljen.\n",
@@ -584,7 +777,7 @@ function App() {
 
   const handleSendStdin = useCallback((text: string) => {
     window.api.sendStdin(text)
-    setTerminalOutput(prev => [...prev, {
+    setTerminalOutput((prev) => [...prev, {
       id: terminalIdRef.current++,
       type: "stdout",
       text: text,
@@ -594,7 +787,7 @@ function App() {
   // Listen for program output from main process
   useEffect(() => {
     const cleanStdout = window.api.onProgramStdout((data: string) => {
-      setTerminalOutput(prev => {
+      setTerminalOutput((prev) => {
         if (prev.length === 0) return [{ id: terminalIdRef.current++, type: "stdout", text: data }]
         const last = prev[prev.length - 1]
         if (last.type === "stdout") {
@@ -607,7 +800,7 @@ function App() {
     })
 
     const cleanStderr = window.api.onProgramStderr((data: string) => {
-      setTerminalOutput(prev => [...prev, {
+      setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "stderr",
         text: data,
@@ -616,7 +809,7 @@ function App() {
 
     const cleanExit = window.api.onProgramExit((code: number | null) => {
       setIsRunning(false)
-      setTerminalOutput(prev => [...prev, {
+      setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
         text: `\nProgram završen sa izlaznim kodom: ${code ?? "?"}\n`,
@@ -625,7 +818,7 @@ function App() {
 
     const cleanError = window.api.onProgramError((error: string) => {
       setIsRunning(false)
-      setTerminalOutput(prev => [...prev, {
+      setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
         text: `Greška: ${error}\n`,
@@ -649,54 +842,88 @@ function App() {
 
   const handleReloadExternal = useCallback(() => {
     if (externalChangeData) {
-      setCode(externalChangeData.content)
-      setSavedCode(externalChangeData.content)
+      handleCodeChange(externalChangeData.content)
       setExternalChangeData(null)
     }
-  }, [externalChangeData])
+  }, [externalChangeData, handleCodeChange])
 
-  const fileName = currentFilePath
-    ? currentFilePath.split(/[/\\]/).pop() ?? null
+  const activeFileName = activeFilePath
+    ? activeFilePath.split(/[/\\]/).pop() ?? null
     : null
 
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background text-foreground dark">
-        <TitleBar filePath={currentFilePath} onClose={handleClose} isDirty={isDirty} />
+        <TitleBar filePath={activeFilePath} onClose={handleClose} isDirty={isDirty} />
         <Toolbar
           onNew={handleNew}
           onOpen={handleOpen}
+          onOpenFolder={handleOpenFolder}
           onSave={handleSave}
           showSidePanel={showSidePanel}
           activeSideTab={activeSideTab}
           onToggleAI={handleToggleAI}
           onToggleAnalysis={handleToggleAnalysis}
+          showExplorer={showExplorer}
+          onToggleExplorer={() => setShowExplorer(!showExplorer)}
           onRun={handleRun}
           onStop={handleStop}
           isRunning={isRunning}
           isCompiling={isCompiling}
           onSettings={() => setSettingsOpen(true)}
+          mode={mode}
         />
 
         <ResizablePanelGroup orientation="horizontal" className="flex-1">
-          <ResizablePanel defaultSize={showSidePanel ? "72%" : "100%"} minSize={300}>
-            <ResizablePanelGroup orientation="vertical">
-              <ResizablePanel defaultSize="70%" minSize={200}>
-                <Editor
-                  value={code}
-                  onChange={setCode}
-                  onCursorChange={(line, column) => {
-                    setCursorLine(line)
-                    setCursorColumn(column)
-                  }}
-                  markers={markers}
-                  fontSize={settings.editor.fontSize}
-                  tabSize={settings.editor.tabSize}
-                  wordWrap={settings.editor.wordWrap}
+          {showExplorer && (
+            <>
+              <ResizablePanel defaultSize="20%" minSize={200} maxSize={400}>
+                <FileExplorer
+                  projectName={projectName}
+                  projectPath={projectPath}
+                  tree={projectTree}
+                  activeFilePath={activeFilePath}
+                  fileErrorCounts={fileErrorCounts}
+                  onSelectFile={handleSelectFile}
+                  onRefreshTree={handleRefreshTree}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
+                  onRenameItem={handleRenameItem}
+                  onDeleteItem={handleDeleteItem}
                 />
               </ResizablePanel>
               <ResizableHandle withHandle />
-              <ResizablePanel defaultSize="40%" minSize={100}>
+            </>
+          )}
+
+          <ResizablePanel defaultSize={showExplorer ? (showSidePanel ? "52%" : "80%") : (showSidePanel ? "72%" : "100%")} minSize={300}>
+            <ResizablePanelGroup orientation="vertical">
+              <ResizablePanel defaultSize="70%" minSize={200} className="flex flex-col">
+                <TabBar
+                  openFilePaths={openFilePaths}
+                  activeFilePath={activeFilePath}
+                  dirtyFiles={dirtyFiles}
+                  onSelectTab={handleSelectFile}
+                  onCloseTab={handleCloseTab}
+                />
+                <div className="flex-1">
+                  <Editor
+                    value={code}
+                    onChange={handleCodeChange}
+                    onCursorChange={(line, column) => {
+                      setCursorLine(line)
+                      setCursorColumn(column)
+                    }}
+                    markers={activeMarkers}
+                    fontSize={settings.editor.fontSize}
+                    tabSize={settings.editor.tabSize}
+                    wordWrap={settings.editor.wordWrap}
+                    filePath={activeFilePath}
+                  />
+                </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize="30%" minSize={100}>
                 <OutputPanel
                   terminalOutput={terminalOutput}
                   isRunning={isRunning}
@@ -724,17 +951,27 @@ function App() {
                   aiError={aiError}
                   onAiSend={handleAiSend}
                   onAiStop={handleAiStop}
+                  onSelectFile={handleSelectFile}
                 />
               </ResizablePanel>
             </>
           )}
         </ResizablePanelGroup>
 
-        <StatusBar filePath={currentFilePath} line={cursorLine} column={cursorColumn} language={language} gccDetected={gccDetected} gccVersion={gccVersion} cppcheckDetected={cppcheckDetected} cppcheckVersion={cppcheckVersion} />
+        <StatusBar
+          filePath={activeFilePath}
+          line={cursorLine}
+          column={cursorColumn}
+          language={language}
+          gccDetected={gccDetected}
+          gccVersion={gccVersion}
+          cppcheckDetected={cppcheckDetected}
+          cppcheckVersion={cppcheckVersion}
+        />
 
         <UnsavedChangesDialog
           open={showUnsavedDialog}
-          fileName={fileName}
+          fileName={activeFileName}
           onSave={() => handleUnsavedDialogClose('save')}
           onDiscard={() => handleUnsavedDialogClose('discard')}
           onCancel={() => handleUnsavedDialogClose('cancel')}

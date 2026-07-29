@@ -1,6 +1,7 @@
 import {
   FilePlus,
   FolderOpen,
+  FolderTree,
   Save,
   Settings,
   Bot,
@@ -21,35 +22,60 @@ import { cn } from "@/lib/utils"
 interface ToolbarProps {
   onNew: () => void
   onOpen: () => void
+  onOpenFolder: () => void
   onSave: () => void
   showSidePanel: boolean
   activeSideTab: "ai" | "analysis"
   onToggleAI: () => void
   onToggleAnalysis: () => void
+  showExplorer: boolean
+  onToggleExplorer: () => void
   onRun: () => void
   onStop: () => void
   isRunning: boolean
   isCompiling: boolean
   onSettings: () => void
+  mode: 'single' | 'project'
 }
 
 export function Toolbar({
   onNew,
   onOpen,
+  onOpenFolder,
   onSave,
   showSidePanel,
   activeSideTab,
   onToggleAI,
   onToggleAnalysis,
+  showExplorer,
+  onToggleExplorer,
   onRun,
   onStop,
   isRunning,
   isCompiling,
   onSettings,
+  mode,
 }: ToolbarProps) {
   return (
     <div className="flex h-10 items-center border-b bg-secondary px-2 gap-1">
       <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "h-8 w-8 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150",
+                showExplorer && "!bg-primary/20 !text-primary"
+              )}
+              onClick={onToggleExplorer}
+            >
+              <FolderTree className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>File Explorer ({mode === 'project' ? 'Projekat' : 'Pojedinačni fajl'})</TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -76,6 +102,21 @@ export function Toolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Otvori fajl</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1 px-2.5 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150 text-xs font-medium"
+              onClick={onOpenFolder}
+            >
+              <FolderOpen className="h-4 w-4 text-amber-400" />
+              <span>Projekat</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Otvori projekat / folder (Ctrl+Shift+O)</TooltipContent>
         </Tooltip>
 
         <Tooltip>

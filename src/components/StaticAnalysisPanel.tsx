@@ -48,6 +48,13 @@ interface StaticAnalysisPanelProps {
   cppcheckIssues: CppcheckIssue[]
   isAnalyzing: boolean
   onRefreshCppcheck: () => void
+  onSelectFile?: (filePath: string, line?: number) => void
+}
+
+function getFileName(filePath?: string): string {
+  if (!filePath) return ''
+  const parts = filePath.split(/[/\\]/)
+  return parts[parts.length - 1] || filePath
 }
 
 function computeMetrics(rawCode: string): CodeMetrics {
@@ -126,7 +133,7 @@ function getSeverityIcon(severity: CppcheckIssue["severity"]) {
   }
 }
 
-export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefreshCppcheck }: StaticAnalysisPanelProps) {
+export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefreshCppcheck, onSelectFile }: StaticAnalysisPanelProps) {
   const metrics = useMemo(() => computeMetrics(code), [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
@@ -215,12 +222,25 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
               ) : (
                 <div className="space-y-2">
                   {cppcheckIssues.map((issue, index) => (
-                    <Card key={`${issue.id}-${issue.line}-${index}`} className="border shadow-none">
+                    <Card
+                      key={`${issue.id}-${issue.line}-${index}`}
+                      className="border shadow-none hover:bg-muted/40 transition-colors cursor-pointer"
+                      onClick={() => {
+                        if (issue.filePath && onSelectFile) {
+                          onSelectFile(issue.filePath, issue.line)
+                        }
+                      }}
+                    >
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2.5">
                           {getSeverityIcon(issue.severity)}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
+                              {issue.filePath && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold text-blue-400">
+                                  {getFileName(issue.filePath)}
+                                </Badge>
+                              )}
                               <span className="text-xs text-muted-foreground font-medium">
                                 Linija {issue.line}
                                 {issue.column > 0 && `:${issue.column}`}

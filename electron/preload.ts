@@ -3,12 +3,26 @@ import type { GccResult } from '../src/types'
 
 contextBridge.exposeInMainWorld('api', {
     openFile: () => ipcRenderer.invoke('file:open'),
+    readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath) as Promise<{ filePath: string; content: string } | null>,
     saveFile: (path: string, content: string) =>
         ipcRenderer.invoke('file:save', path, content),
+    openFolder: () => ipcRenderer.invoke('project:open-folder') as Promise<{ folderPath: string; folderName: string; tree: import('../src/types/project').FileNode[] } | null>,
+    readProjectTree: (folderPath: string) => ipcRenderer.invoke('project:read-tree', folderPath) as Promise<import('../src/types/project').FileNode[]>,
+    createProjectFile: (targetPath: string) => ipcRenderer.invoke('project:file-create', targetPath) as Promise<{ success: boolean; error?: string }>,
+    createProjectFolder: (targetPath: string) => ipcRenderer.invoke('project:folder-create', targetPath) as Promise<{ success: boolean; error?: string }>,
+    renameProjectItem: (oldPath: string, newPath: string) => ipcRenderer.invoke('project:rename', oldPath, newPath) as Promise<{ success: boolean; error?: string }>,
+    deleteProjectItem: (targetPath: string) => ipcRenderer.invoke('project:delete', targetPath) as Promise<{ success: boolean; error?: string }>,
+    compileProject: (projectDir: string) => ipcRenderer.invoke('gcc:compile-project', projectDir) as Promise<GccResult>,
+    analyzeProject: (projectDir: string) => ipcRenderer.invoke('cppcheck:analyze-project', projectDir) as Promise<{ issues: import('../src/types').CppcheckIssue[]; success: boolean; error?: string }>,
     onMenuOpen: (callback: () => void) => {
         const handler = () => callback()
         ipcRenderer.on('menu:open-file', handler)
         return () => ipcRenderer.removeListener('menu:open-file', handler)
+    },
+    onMenuOpenFolder: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('menu:open-folder', handler)
+        return () => ipcRenderer.removeListener('menu:open-folder', handler)
     },
     onMenuSave: (callback: () => void) => {
         const handler = () => callback()

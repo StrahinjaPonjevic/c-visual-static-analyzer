@@ -131,6 +131,16 @@ ipcMain.handle('file:open', async () => {
   return { filePath, content }
 })
 
+ipcMain.handle('file:read', async (_event, filePath: string) => {
+  if (!filePath || !isPathSafe(filePath)) return null
+  try {
+    const content = await fs.readFile(filePath, 'utf-8')
+    return { filePath, content }
+  } catch {
+    return null
+  }
+})
+
 ipcMain.handle('file:save', async (_event, filePath: string, content: string) => {
   if (!filePath || typeof filePath !== 'string') {
     return { success: false, error: 'Invalid file path' }
@@ -165,6 +175,269 @@ ipcMain.handle('file:save-as', async (_event, content: string) => {
   lastSavedContent = content
   startWatching(result.filePath)
   return result.filePath
+})
+
+// ---- Project Mode Helpers & IPC ----
+
+const IGNORED_NAMES = new Set(['.git', 'node_modules', 'dist', 'bin', '.vscode', '.idea', 'build'])
+const IGNORED_EXTENSIONS = new Set(['.o', '.exe', '.obj', '.pdb', '.a', '.so', '.dll', '.dylib', '.zip', '.tar', '.gz'])
+
+async function readDirectoryTree(dirPath: string, rootPath: string): Promise<import('../src/types/project').FileNode[]> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true })
+  const nodes: import('../src/types/project').FileNode[] = []
+
+  for (const entry of entries) {
+    if (IGNORED_NAMES.has(entry.name)) continue
+    const fullPath = path.join(dirPath, entry.name)
+    const relativePath = path.relative(rootPath, fullPath)
+    const ext = path.extname(entry.name).toLowerCase()
+
+    if (entry.isDirectory()) {
+      const children = await readDirectoryTree(fullPath, rootPath)
+      nodes.push({
+        name: entry.name,
+        path: fullPath,
+        relativePath,
+        isDirectory: true,
+        children,
+      })
+    } else {
+      if (IGNORED_EXTENSIONS.has(ext)) continue
+      nodes.push({
+        name: entry.name,
+        path: fullPath,
+        relativePath,
+        isDirectory: false,
+        extension: ext,
+      })
+    }
+  }
+
+  return nodes.sort((a, b) => {
+    if (a.isDirectory && !b.isDirectory) return -1
+    if (!a.isDirectory && b.isDirectory) return 1
+    return a.name.localeCompare(b.name)
+  })
+}
+
+async function collectCFilesAndIncludes(dirPath: string): Promise<{ cFiles: string[]; includeDirs: Set<string> }> {
+  const cFiles: string[] = []
+  const includeDirs = new Set<string>()
+
+  async function walk(currentDir: string) {
+    const entries = await fs.readdir(currentDir, { withFileTypes: true })
+    for (const entry of entries) {
+      if (IGNORED_NAMES.has(entry.name)) continue
+      const fullPath = path.join(currentDir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(fullPath)
+      } else {
+        const ext = path.extname(entry.name).toLowerCase()
+        if (ext === '.c') {
+          cFiles.push(fullPath)
+        }
+        if (ext === '.h' || ext === '.hpp') {
+          includeDirs.add(currentDir)
+        }
+      }
+    }
+  }
+
+  await walk(dirPath)
+  return { cFiles, includeDirs }
+}
+
+ipcMain.handle('project:open-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  })
+  if (result.canceled || !result.filePaths[0]) return null
+  const folderPath = result.filePaths[0]
+  if (!isPathSafe(folderPath)) return null
+  const tree = await readDirectoryTree(folderPath, folderPath)
+  return { folderPath, folderName: path.basename(folderPath), tree }
+})
+
+ipcMain.handle('project:read-tree', async (_event, folderPath: string) => {
+  if (!folderPath || !isPathSafe(folderPath)) return []
+  return readDirectoryTree(folderPath, folderPath)
+})
+
+ipcMain.handle('project:file-create', async (_event, targetPath: string) => {
+  if (!targetPath || !isPathSafe(targetPath)) return { success: false, error: 'Neispravna putanja' }
+  try {
+    await fs.mkdir(path.dirname(targetPath), { recursive: true })
+    await fs.writeFile(targetPath, '', 'utf-8')
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('project:folder-create', async (_event, targetPath: string) => {
+  if (!targetPath || !isPathSafe(targetPath)) return { success: false, error: 'Neispravna putanja' }
+  try {
+    await fs.mkdir(targetPath, { recursive: true })
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('project:rename', async (_event, oldPath: string, newPath: string) => {
+  if (!oldPath || !newPath || !isPathSafe(oldPath) || !isPathSafe(newPath)) {
+    return { success: false, error: 'Neispravna putanja' }
+  }
+  try {
+    await fs.rename(oldPath, newPath)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('project:delete', async (_event, targetPath: string) => {
+  if (!targetPath || !isPathSafe(targetPath)) return { success: false, error: 'Neispravna putanja' }
+  try {
+    const stat = await fs.stat(targetPath)
+    if (stat.isDirectory()) {
+      await fs.rm(targetPath, { recursive: true, force: true })
+    } else {
+      await fs.unlink(targetPath)
+    }
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
+  if (!projectDir || !isPathSafe(projectDir)) {
+    return { success: false, error: 'Neispravna putanja projekta' }
+  }
+
+  const { cFiles, includeDirs } = await collectCFilesAndIncludes(projectDir)
+  if (cFiles.length === 0) {
+    return { success: false, error: 'Nije pronađen nijedan .c fajl u projektu.' }
+  }
+
+  const tempDir = os.tmpdir()
+  const timestamp = Date.now()
+  const exePath = path.join(tempDir, process.platform === 'win32' ? `project_${timestamp}.exe` : `project_${timestamp}`)
+  tempFiles.add(exePath)
+
+  let settings: AppSettings
+  try {
+    settings = await loadSettings()
+  } catch {
+    settings = { ...DEFAULTS }
+  }
+
+  const cStandard = settings.compiler.cStandard || 'c11'
+  const extraFlags = sanitizeFlags(settings.compiler.extraFlags)
+
+  const includeFlags = Array.from(includeDirs).flatMap(dir => ['-I', dir])
+  const gccExe = process.platform === 'win32' ? 'gcc.exe' : 'gcc'
+
+  try {
+    const result = await execFileAsync(gccExe, [
+      `-std=${cStandard}`, '-Wall', '-Wextra',
+      ...includeFlags,
+      ...extraFlags,
+      '-o', exePath,
+      ...cFiles,
+    ], {
+      cwd: projectDir,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30000,
+    })
+
+    const stderr = result.stderr || ''
+    const warnings = parseGccErrors(stderr)
+
+    return {
+      success: true,
+      exePath,
+      errors: warnings,
+      stdout: result.stdout || '',
+      stderr,
+    }
+  } catch (err) {
+    const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string | number }
+    if (execErr.code === 'ENOENT') {
+      return {
+        success: false,
+        error: 'GCC nije instaliran. Instalirajte MinGW-GCC (Windows) ili gcc (Linux).',
+        errors: [], stdout: '', stderr: '',
+      }
+    }
+    const stderr = execErr.stderr || ''
+    const stdout = execErr.stdout || ''
+    const errors = parseGccErrors(stderr)
+    const hasError = typeof execErr.code === 'number' || errors.some(e => e.type === 'error')
+
+    return {
+      success: !hasError,
+      errors,
+      stdout,
+      stderr,
+      exePath: hasError ? undefined : exePath,
+    }
+  }
+})
+
+ipcMain.handle('cppcheck:analyze-project', async (_event, projectDir: string): Promise<CppcheckResult> => {
+  if (!projectDir || !isPathSafe(projectDir)) {
+    return { issues: [], success: false, error: 'Neispravna putanja projekta' }
+  }
+
+  try {
+    const { includeDirs } = await collectCFilesAndIncludes(projectDir)
+    const settings = await loadSettings().catch(() => null)
+    const extraFlags = sanitizeFlags(settings?.cppcheck.extraFlags)
+    const cStandard = settings?.compiler.cStandard || 'c11'
+
+    const includeFlags = Array.from(includeDirs).flatMap(dir => ['-I', dir])
+    const cppcheckExe = process.platform === 'win32' ? 'cppcheck.exe' : 'cppcheck'
+
+    let stdout: string
+    let stderr: string
+    try {
+      const result = await execFileAsync(cppcheckExe, [
+        '--enable=all',
+        '--inline-suppr',
+        `--std=${cStandard}`,
+        '--xml-version=2',
+        '-q',
+        ...includeFlags,
+        ...extraFlags,
+        projectDir,
+      ], {
+        cwd: projectDir,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 30000,
+      })
+      stdout = result.stdout || ''
+      stderr = result.stderr || ''
+    } catch (err) {
+      const execErr = err as { stdout?: string; stderr?: string; message: string; code?: string }
+      stdout = execErr.stdout || ''
+      stderr = execErr.stderr || ''
+      if (execErr.code === 'ENOENT') {
+        return { issues: [], success: false, error: 'Cppcheck nije instaliran.' }
+      }
+    }
+
+    const xmlOutput = stderr || stdout
+    const issues = parseCppcheckXml(xmlOutput)
+    return { issues, success: true }
+  } catch (err) {
+    return {
+      issues: [],
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
 })
 
 ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<CppcheckResult> => {
@@ -725,6 +998,11 @@ function buildMenu(win: BrowserWindow) {
           label: 'Open C File...',
           accelerator: 'CmdOrCtrl+O',
           click: () => win.webContents.send('menu:open-file'),
+        },
+        {
+          label: 'Open Folder...',
+          accelerator: 'CmdOrCtrl+Shift+O',
+          click: () => win.webContents.send('menu:open-folder'),
         },
         {
           label: 'Save',

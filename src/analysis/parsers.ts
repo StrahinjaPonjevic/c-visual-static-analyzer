@@ -21,6 +21,7 @@ export function parseCppcheckXml(xml: string): CppcheckIssue[] {
     const innerContent = match[4]
     const locationMatch = innerContent.match(/<location\s+file="([^"]*)"\s+line="(\d+)"(?:\s+column="(\d+)")?/)
     if (locationMatch) {
+      const filePath = locationMatch[1]
       const line = parseInt(locationMatch[2], 10) || 0
       const column = parseInt(locationMatch[3] || '0', 10) || 0
       const cweMatch = match[0].match(/cwe="(\d+)"/)
@@ -31,6 +32,7 @@ export function parseCppcheckXml(xml: string): CppcheckIssue[] {
         line,
         column,
         cwe: cweMatch ? parseInt(cweMatch[1], 10) : undefined,
+        filePath,
       })
     }
   }
@@ -38,17 +40,18 @@ export function parseCppcheckXml(xml: string): CppcheckIssue[] {
   return issues
 }
 
-const gccErrorRegex = /^(?:[a-zA-Z]:)?[^:]+:(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
+const gccErrorRegex = /^((?:[a-zA-Z]:)?[^:]+):(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
 
 export function parseGccErrors(stderr: string): GccError[] {
   const errors: GccError[] = []
   let match: RegExpExecArray | null
   while ((match = gccErrorRegex.exec(stderr)) !== null) {
     errors.push({
-      line: parseInt(match[1], 10),
-      column: parseInt(match[2], 10),
-      type: match[3] as 'error' | 'warning',
-      message: match[4],
+      filePath: match[1],
+      line: parseInt(match[2], 10),
+      column: parseInt(match[3], 10),
+      type: match[4] as 'error' | 'warning',
+      message: match[5],
     })
   }
   return errors

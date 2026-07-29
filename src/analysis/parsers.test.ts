@@ -129,6 +129,18 @@ describe('parseGccErrors', () => {
     const errors = parseGccErrors(stderr)
     expect(errors).toHaveLength(1)
     expect(errors[0].line).toBe(10)
+    expect(errors[0].filePath).toBe('C:\\Users\\test\\file.c')
+  })
+
+  it('parses errors across multiple different files', () => {
+    const stderr = [
+      'src/main.c:5:10: error: error in main',
+      'src/utils.c:20:2: warning: warning in utils',
+    ].join('\n')
+    const errors = parseGccErrors(stderr)
+    expect(errors).toHaveLength(2)
+    expect(errors[0].filePath).toBe('src/main.c')
+    expect(errors[1].filePath).toBe('src/utils.c')
   })
 
   it('ignores non-GCC output', () => {

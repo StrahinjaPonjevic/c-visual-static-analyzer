@@ -3,8 +3,18 @@
 interface Window {
     api: {
         openFile: () => Promise<{ filePath: string; content: string } | null>
+        readFile: (filePath: string) => Promise<{ filePath: string; content: string } | null>
         saveFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
+        openFolder: () => Promise<{ folderPath: string; folderName: string; tree: import('./types/project').FileNode[] } | null>
+        readProjectTree: (folderPath: string) => Promise<import('./types/project').FileNode[]>
+        createProjectFile: (targetPath: string) => Promise<{ success: boolean; error?: string }>
+        createProjectFolder: (targetPath: string) => Promise<{ success: boolean; error?: string }>
+        renameProjectItem: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
+        deleteProjectItem: (targetPath: string) => Promise<{ success: boolean; error?: string }>
+        compileProject: (projectDir: string) => Promise<import('./types').GccResult>
+        analyzeProject: (projectDir: string) => Promise<{ issues: import('./types').CppcheckIssue[]; success: boolean; error?: string }>
         onMenuOpen: (callback: () => void) => () => void
+        onMenuOpenFolder: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
         onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => () => void
         saveAsFile: (content: string) => Promise<string | null>

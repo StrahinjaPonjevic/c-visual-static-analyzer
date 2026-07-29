@@ -4,6 +4,7 @@ export interface CodeMarker {
   severity: 'error' | 'warning' | 'info' | 'good'
   message: string
   source: 'cppcheck' | 'gcc' | 'metric'
+  filePath?: string
 }
 
 export interface GccError {
@@ -11,6 +12,7 @@ export interface GccError {
   column: number
   type: 'error' | 'warning'
   message: string
+  filePath?: string
 }
 
 export interface GccResult {
@@ -29,4 +31,6 @@ export interface CppcheckIssue {
   line: number
   column: number
   cwe?: number
+  filePath?: string
 }
+

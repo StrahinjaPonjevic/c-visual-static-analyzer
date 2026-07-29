@@ -17,6 +17,7 @@ interface SidePanelProps {
   aiError: string | null
   onAiSend: () => void
   onAiStop: () => void
+  onSelectFile?: (filePath: string, line?: number) => void
 }
 
 export function SidePanel({
@@ -32,6 +33,7 @@ export function SidePanel({
   aiError,
   onAiSend,
   onAiStop,
+  onSelectFile,
 }: SidePanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-sidebar">
@@ -53,6 +55,7 @@ export function SidePanel({
           cppcheckIssues={cppcheckIssues}
           isAnalyzing={isAnalyzing}
           onRefreshCppcheck={onRefreshCppcheck}
+          onSelectFile={onSelectFile}
         />
       </div>
     </div>

@@ -64,6 +64,7 @@ export function computeMarkers(
       severity: mapCppcheckSeverity(issue.severity),
       message: issue.message,
       source: 'cppcheck',
+      filePath: issue.filePath,
     })
   }
 
@@ -75,6 +76,7 @@ export function computeMarkers(
       severity: err.type === 'error' ? 'error' : 'warning',
       message: err.message,
       source: 'gcc',
+      filePath: err.filePath,
     })
   }
 

@@ -12,9 +12,10 @@ type Props = {
     fontSize?: number
     tabSize?: number
     wordWrap?: 'off' | 'on'
+    filePath?: string | null
 }
 
-export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off' }: Props) {
+export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off', filePath }: Props) {
     const [editorInstance, setEditorInstance] = useState<MonacoEditorInstance | null>(null)
     const decorationIdsRef = useRef<string[]>([])
     const isInternalChange = useRef(false)
@@ -71,10 +72,13 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         onChange(v ?? '')
     }
 
+    const language = filePath?.endsWith('.h') || filePath?.endsWith('.hpp') ? 'c' : 'c'
+
     return (
         <MonacoEditor
+            key={filePath || 'default'}
             height="100%"
-            language='c'
+            language={language}
             value={value}
             onChange={handleChange}
             theme='vs-dark'
