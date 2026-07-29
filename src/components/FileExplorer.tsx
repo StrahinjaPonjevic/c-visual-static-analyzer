@@ -12,6 +12,7 @@ import {
   Trash2,
   Edit2,
   File,
+  LogOut,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,6 +34,7 @@ interface FileExplorerProps {
   onCreateFolder: (parentDir: string, folderName: string) => void
   onRenameItem: (oldPath: string, newPath: string) => void
   onDeleteItem: (targetPath: string) => void
+  onCloseProject?: () => void
 }
 
 export function FileExplorer({
@@ -47,6 +49,7 @@ export function FileExplorer({
   onCreateFolder,
   onRenameItem,
   onDeleteItem,
+  onCloseProject,
 }: FileExplorerProps) {
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null)
@@ -337,6 +340,22 @@ export function FileExplorer({
               </TooltipTrigger>
               <TooltipContent>Osveži stablo fajlova</TooltipContent>
             </Tooltip>
+
+            {onCloseProject && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 hover:text-amber-400"
+                    onClick={onCloseProject}
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Zatvori projekat / Izađi iz projektnog režima</TooltipContent>
+              </Tooltip>
+            )}
           </div>
         )}
       </div>

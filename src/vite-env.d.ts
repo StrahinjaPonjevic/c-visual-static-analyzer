@@ -15,9 +15,10 @@ interface Window {
         analyzeProject: (projectDir: string) => Promise<{ issues: import('./types').CppcheckIssue[]; success: boolean; error?: string }>
         onMenuOpen: (callback: () => void) => () => void
         onMenuOpenFolder: (callback: () => void) => () => void
+        onMenuCloseFolder: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
         onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => () => void
-        saveAsFile: (content: string) => Promise<string | null>
+        saveAsFile: (content: string, defaultPath?: string) => Promise<string | null>
         analyzeCode: (code: string) => Promise<{
             issues: {
                 id: string

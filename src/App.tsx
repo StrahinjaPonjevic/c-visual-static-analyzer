@@ -488,10 +488,19 @@ export function App() {
     })
   }, [])
 
+  const handleRefreshTree = useCallback(async () => {
+    if (projectPathRef.current) {
+      const tree = await window.api.readProjectTree(projectPathRef.current)
+      setProjectTree(tree)
+    }
+  }, [])
+
   const handleSave = useCallback(async () => {
     const latestCode = codeRef.current
     const targetPath = activeFilePathRef.current
-    if (targetPath) {
+    const isUntitled = !targetPath || targetPath.startsWith('untitled_') || (!targetPath.includes('/') && !targetPath.includes('\\'))
+
+    if (!isUntitled && targetPath) {
       const result = await window.api.saveFile(targetPath, latestCode)
       if (result.success) {
         setFileContents((prev) => ({
@@ -503,14 +512,30 @@ export function App() {
         }
       }
     } else {
-      const newPath = await window.api.saveAsFile(latestCode)
+      const defaultDir = projectPathRef.current || undefined
+      const newPath = await window.api.saveAsFile(latestCode, defaultDir)
       if (newPath) {
+        setOpenFilePaths((prev) => {
+          if (targetPath && prev.includes(targetPath)) {
+            return prev.map((p) => (p === targetPath ? newPath : p))
+          }
+          return prev.includes(newPath) ? prev : [...prev, newPath]
+        })
+        setFileContents((prev) => {
+          const next = { ...prev }
+          if (targetPath) delete next[targetPath]
+          next[newPath] = { content: latestCode, savedContent: latestCode }
+          return next
+        })
         setActiveFilePath(newPath)
-        setOpenFilePaths([newPath])
-        setFileContents({ [newPath]: { content: latestCode, savedContent: latestCode } })
+
+        if (modeRef.current === 'project' && projectPathRef.current) {
+          handleRefreshTree()
+          runCppcheckProject(projectPathRef.current)
+        }
       }
     }
-  }, [runCppcheckProject])
+  }, [runCppcheckProject, handleRefreshTree])
 
   const handleNew = useCallback(() => {
     const newUntitledName = `untitled_${Date.now()}.c`
@@ -566,13 +591,6 @@ export function App() {
     }
   }, [handleSelectFile, runCppcheckProject])
 
-  const handleRefreshTree = useCallback(async () => {
-    if (projectPathRef.current) {
-      const tree = await window.api.readProjectTree(projectPathRef.current)
-      setProjectTree(tree)
-    }
-  }, [])
-
   const handleCreateFile = useCallback(async (parentDir: string, fileName: string) => {
     const targetPath = `${parentDir}/${fileName}`
     const res = await window.api.createProjectFile(targetPath)
@@ -608,17 +626,30 @@ export function App() {
     }
   }, [handleRefreshTree, handleCloseTab])
 
+  const handleCloseProject = useCallback(() => {
+    setMode('single')
+    setProjectPath(null)
+    setProjectName(null)
+    setProjectTree([])
+    setShowExplorer(false)
+    if (codeRef.current) {
+      runCppcheckSingle(codeRef.current)
+    }
+  }, [runCppcheckSingle])
+
   useEffect(() => {
     const cleanupOpen = window.api.onMenuOpen(() => handleOpen())
     const cleanupOpenFolder = window.api.onMenuOpenFolder(() => handleOpenFolder())
+    const cleanupCloseFolder = window.api.onMenuCloseFolder(() => handleCloseProject())
     const cleanupSave = window.api.onMenuSave(() => handleSave())
 
     return () => {
       cleanupOpen()
       cleanupOpenFolder()
+      cleanupCloseFolder()
       cleanupSave()
     }
-  }, [handleOpen, handleOpenFolder, handleSave])
+  }, [handleOpen, handleOpenFolder, handleCloseProject, handleSave])
 
   const handleToggleAI = useCallback(() => {
     if (showSidePanel && activeSideTab === "ai") {
@@ -859,6 +890,7 @@ export function App() {
           onNew={handleNew}
           onOpen={handleOpen}
           onOpenFolder={handleOpenFolder}
+          onCloseProject={handleCloseProject}
           onSave={handleSave}
           showSidePanel={showSidePanel}
           activeSideTab={activeSideTab}
@@ -872,6 +904,7 @@ export function App() {
           isCompiling={isCompiling}
           onSettings={() => setSettingsOpen(true)}
           mode={mode}
+          projectName={projectName}
         />
 
         <ResizablePanelGroup orientation="horizontal" className="flex-1">
@@ -890,6 +923,7 @@ export function App() {
                   onCreateFolder={handleCreateFolder}
                   onRenameItem={handleRenameItem}
                   onDeleteItem={handleDeleteItem}
+                  onCloseProject={handleCloseProject}
                 />
               </ResizablePanel>
               <ResizableHandle withHandle />

@@ -24,12 +24,17 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('menu:open-folder', handler)
         return () => ipcRenderer.removeListener('menu:open-folder', handler)
     },
+    onMenuCloseFolder: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('menu:close-folder', handler)
+        return () => ipcRenderer.removeListener('menu:close-folder', handler)
+    },
     onMenuSave: (callback: () => void) => {
         const handler = () => callback()
         ipcRenderer.on('menu:save-file', handler)
         return () => ipcRenderer.removeListener('menu:save-file', handler)
     },
-    saveAsFile: (content: string) => ipcRenderer.invoke('file:save-as', content),
+    saveAsFile: (content: string, defaultPath?: string) => ipcRenderer.invoke('file:save-as', content, defaultPath),
     onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => {
         const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; content: string }) => callback(data)
         ipcRenderer.on('file:externally-changed', handler)

@@ -9,6 +9,7 @@ import {
   Play,
   Square,
   Loader2,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,6 +24,7 @@ interface ToolbarProps {
   onNew: () => void
   onOpen: () => void
   onOpenFolder: () => void
+  onCloseProject?: () => void
   onSave: () => void
   showSidePanel: boolean
   activeSideTab: "ai" | "analysis"
@@ -36,12 +38,14 @@ interface ToolbarProps {
   isCompiling: boolean
   onSettings: () => void
   mode: 'single' | 'project'
+  projectName?: string | null
 }
 
 export function Toolbar({
   onNew,
   onOpen,
   onOpenFolder,
+  onCloseProject,
   onSave,
   showSidePanel,
   activeSideTab,
@@ -55,6 +59,7 @@ export function Toolbar({
   isCompiling,
   onSettings,
   mode,
+  projectName,
 }: ToolbarProps) {
   return (
     <div className="flex h-10 items-center border-b bg-secondary px-2 gap-1">
@@ -104,20 +109,39 @@ export function Toolbar({
           <TooltipContent>Otvori fajl</TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1 px-2.5 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150 text-xs font-medium"
-              onClick={onOpenFolder}
-            >
-              <FolderOpen className="h-4 w-4 text-amber-400" />
-              <span>Projekat</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Otvori projekat / folder (Ctrl+Shift+O)</TooltipContent>
-        </Tooltip>
+        {mode === 'project' ? (
+          <div className="flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-md text-xs font-medium">
+            <FolderOpen className="h-3.5 w-3.5" />
+            <span className="max-w-[120px] truncate">{projectName || "Projekat"}</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onCloseProject}
+                  className="ml-1 rounded p-0.5 hover:bg-amber-500/30 text-amber-300 hover:text-white transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Zatvori projekat (Ctrl+Shift+W)</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1 px-2.5 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150 text-xs font-medium"
+                onClick={onOpenFolder}
+              >
+                <FolderOpen className="h-4 w-4 text-amber-400" />
+                <span>Otvori Projekat</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Otvori projekat / folder (Ctrl+Shift+O)</TooltipContent>
+          </Tooltip>
+        )}
 
         <Tooltip>
           <TooltipTrigger asChild>

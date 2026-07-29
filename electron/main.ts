@@ -162,8 +162,9 @@ ipcMain.handle('file:save', async (_event, filePath: string, content: string) =>
   }
 })
 
-ipcMain.handle('file:save-as', async (_event, content: string) => {
+ipcMain.handle('file:save-as', async (_event, content: string, defaultPath?: string) => {
   const result = await dialog.showSaveDialog({
+    defaultPath: defaultPath && isPathSafe(defaultPath) ? defaultPath : undefined,
     filters: [{ name: 'C fajlovi', extensions: ['c', 'h'] }],
   })
   if (result.canceled) return null
@@ -1003,6 +1004,11 @@ function buildMenu(win: BrowserWindow) {
           label: 'Open Folder...',
           accelerator: 'CmdOrCtrl+Shift+O',
           click: () => win.webContents.send('menu:open-folder'),
+        },
+        {
+          label: 'Close Project',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          click: () => win.webContents.send('menu:close-folder'),
         },
         {
           label: 'Save',
