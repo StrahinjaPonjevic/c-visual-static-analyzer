@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import MonacoEditor from '@monaco-editor/react'
+import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import type { CodeMarker } from '@/types'
+
+type MonacoEditorInstance = Parameters<OnMount>[0]
 
 type Props = {
     value: string
@@ -13,18 +15,18 @@ type Props = {
 }
 
 export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off' }: Props) {
-    const [editorInstance, setEditorInstance] = useState<unknown>(null)
+    const [editorInstance, setEditorInstance] = useState<MonacoEditorInstance | null>(null)
     const decorationIdsRef = useRef<string[]>([])
     const isInternalChange = useRef(false)
 
-    const handleEditorMount = (monacoEditor: unknown) => {
+    const handleEditorMount: OnMount = (monacoEditor) => {
         setEditorInstance(monacoEditor)
     }
 
     useEffect(() => {
         if (!editorInstance || !onCursorChange) return
 
-        const disposable = (editorInstance as { onDidChangeCursorPosition: (cb: (e: { position: { lineNumber: number; column: number } }) => void) => { dispose: () => void } }).onDidChangeCursorPosition((e) => {
+        const disposable = editorInstance.onDidChangeCursorPosition((e) => {
             onCursorChange(e.position.lineNumber, e.position.column)
         })
 
@@ -33,8 +35,6 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
 
     useEffect(() => {
         if (!editorInstance) return
-
-        const editor = editorInstance as { deltaDecorations: (old: string[], newDecorations: { range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }; options: { isWholeLine: boolean; className: string; hoverMessage?: { value: string } } }[]) => string[] }
 
         const newDecorations = (markers ?? []).map(m => ({
             range: {
@@ -50,7 +50,7 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
             },
         }))
 
-        decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, newDecorations)
+        decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, newDecorations)
     }, [editorInstance, markers])
 
     useEffect(() => {
@@ -61,9 +61,8 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
             return
         }
 
-        const editor = editorInstance as { getValue: () => string; setValue: (v: string) => void }
-        if (editor.getValue() !== value) {
-            editor.setValue(value)
+        if (editorInstance.getValue() !== value) {
+            editorInstance.setValue(value)
         }
     }, [value, editorInstance])
 

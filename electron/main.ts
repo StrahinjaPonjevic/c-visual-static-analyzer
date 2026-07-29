@@ -36,6 +36,35 @@ function isPathSafe(filePath: string): boolean {
   }
 }
 
+function sanitizeFlags(flagsStr: string | undefined): string[] {
+  if (!flagsStr || typeof flagsStr !== 'string') return []
+  const tokens = flagsStr.split(/\s+/).filter(Boolean)
+  const safeTokens: string[] = []
+
+  for (const token of tokens) {
+    if (
+      token.includes('-fplugin') ||
+      token.includes('-Wl,') ||
+      token.includes('-Xlinker') ||
+      token.includes('-include') ||
+      token.includes('-imacros') ||
+      token.startsWith('@') ||
+      token.includes('..') ||
+      token.includes('$') ||
+      token.includes('`')
+    ) {
+      console.warn(`[security] Ignorisan nebezbedan flag: ${token}`)
+      continue
+    }
+    if (!token.startsWith('-')) {
+      console.warn(`[security] Ignorisan neispravan argument: ${token}`)
+      continue
+    }
+    safeTokens.push(token)
+  }
+  return safeTokens
+}
+
 interface CppcheckResult {
   issues: CppcheckIssue[]
   success: boolean
@@ -152,9 +181,7 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
   let tempFile: string | null = null
   try {
     const settings = await loadSettings().catch(() => null)
-    const extraFlags = settings?.cppcheck.extraFlags
-      ? settings.cppcheck.extraFlags.split(/\s+/).filter(Boolean)
-      : []
+    const extraFlags = sanitizeFlags(settings?.cppcheck.extraFlags)
     const cStandard = settings?.compiler.cStandard || 'c11'
 
     const tempDir = os.tmpdir()
@@ -276,9 +303,7 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
   }
 
   const cStandard = settings.compiler.cStandard || 'c11'
-  const extraFlags = settings.compiler.extraFlags
-    ? settings.compiler.extraFlags.split(/\s+/).filter(Boolean)
-    : []
+  const extraFlags = sanitizeFlags(settings.compiler.extraFlags)
 
   try {
     const injectedCode = injectUnbuffer(code)
@@ -806,8 +831,12 @@ process.on('exit', () => {
   }
 })
 
+let isCleanedUp = false
+
 app.on('will-quit', async (e) => {
+  if (isCleanedUp) return
   e.preventDefault()
   await cleanupTempFiles()
+  isCleanedUp = true
   app.quit()
 })
