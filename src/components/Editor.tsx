@@ -18,7 +18,6 @@ type Props = {
 export default function Editor({ value, onChange, onCursorChange, markers, fontSize = 14, tabSize = 2, wordWrap = 'off', filePath }: Props) {
     const [editorInstance, setEditorInstance] = useState<MonacoEditorInstance | null>(null)
     const decorationIdsRef = useRef<string[]>([])
-    const isInternalChange = useRef(false)
 
     const handleEditorMount: OnMount = (monacoEditor) => {
         setEditorInstance(monacoEditor)
@@ -56,32 +55,19 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, newDecorations)
     }, [editorInstance, markersKey])
 
-    useEffect(() => {
-        if (!editorInstance) return
-
-        if (isInternalChange.current) {
-            isInternalChange.current = false
-            return
-        }
-
-        if (editorInstance.getValue() !== value) {
-            editorInstance.setValue(value)
-        }
-    }, [value, editorInstance])
-
     const handleChange = (v: string | undefined) => {
-        isInternalChange.current = true
         onChange(v ?? '')
     }
 
     const language = filePath?.endsWith('.h') || filePath?.endsWith('.hpp') ? 'c' : 'c'
+    const normalizedValue = useMemo(() => (value || '').replace(/\r\n/g, '\n'), [value])
 
     return (
         <MonacoEditor
             key={filePath || 'default'}
             height="100%"
             language={language}
-            value={value}
+            defaultValue={normalizedValue}
             onChange={handleChange}
             theme='vs-dark'
             options={{ fontSize, tabSize, wordWrap, minimap: { enabled: false } }}

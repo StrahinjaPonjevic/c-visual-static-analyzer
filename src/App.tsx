@@ -62,7 +62,7 @@ export function App() {
   const [projectName, setProjectName] = useState<string | null>(null)
   const [projectTree, setProjectTree] = useState<FileNode[]>([])
 
-  const [showExplorer, setShowExplorer] = useState(true)
+  const [showExplorer, setShowExplorer] = useState(false)
 
   const [openFilePaths, setOpenFilePaths] = useState<string[]>([])
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
@@ -84,6 +84,7 @@ export function App() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
   const [externalChangeData, setExternalChangeData] = useState<{ filePath: string; content: string; fileName: string } | null>(null)
+  const [editorKey, setEditorKey] = useState(0)
 
   const dirtyFiles = useMemo(() => {
     const dirty = new Set<string>()
@@ -219,9 +220,7 @@ export function App() {
       clearTimeout(cppcheckTimeoutRef.current)
     }
     cppcheckTimeoutRef.current = setTimeout(() => {
-      if (modeRef.current === 'project' && projectPathRef.current) {
-        runCppcheckProject(projectPathRef.current)
-      } else {
+      if (code && code.trim() && code !== "// Prazan editor\n") {
         runCppcheckSingle(code)
       }
     }, settings.cppcheck.debounceMs)
@@ -230,7 +229,7 @@ export function App() {
         clearTimeout(cppcheckTimeoutRef.current)
       }
     }
-  }, [code, runCppcheckSingle, runCppcheckProject, settings.cppcheck.autoAnalyze, settings.cppcheck.debounceMs])
+  }, [code, runCppcheckSingle, settings.cppcheck.autoAnalyze, settings.cppcheck.debounceMs])
 
   const handleRefreshCppcheck = useCallback(() => {
     if (cppcheckTimeoutRef.current) clearTimeout(cppcheckTimeoutRef.current)
@@ -984,6 +983,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
   const handleReloadExternal = useCallback(() => {
     if (externalChangeData) {
       handleCodeChange(externalChangeData.content)
+      setEditorKey((k) => k + 1)
       setExternalChangeData(null)
     }
   }, [externalChangeData, handleCodeChange])
@@ -1059,6 +1059,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                     />
                   ) : (
                     <Editor
+                      key={`${activeFilePath}_${editorKey}`}
                       value={code}
                       onChange={handleCodeChange}
                       onCursorChange={(line, column) => {
