@@ -68,5 +68,113 @@ export function injectUnbuffer(code: string): string {
   const braceIndex = match.index! + match[0].length
   const before = code.slice(0, braceIndex)
   const after = code.slice(braceIndex)
-  return preamble + before + '\n' + '  setvbuf(stdout, NULL, _IONBF, 0);\n  setvbuf(stderr, NULL, _IONBF, 0);\n' + after
+  return preamble + before + ' setvbuf(stdout, NULL, _IONBF, 0); setvbuf(stderr, NULL, _IONBF, 0);' + after
 }
+
+export interface CodeMetrics {
+  lines: number
+  totalLines: number
+  functions: number
+  ifStatements: number
+  loops: number
+  arrays: number
+  pointers: number
+  structs: number
+  mallocCalls: number
+  freeCalls: number
+  includes: number
+  comments: number
+}
+
+export function stripCommentsAndStrings(code: string): string {
+  let result = ''
+  let i = 0
+  while (i < code.length) {
+    if (code[i] === '/' && code[i + 1] === '/') {
+      while (i < code.length && code[i] !== '\n') i++
+    } else if (code[i] === '/' && code[i + 1] === '*') {
+      result += ' '
+      i += 2
+      while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
+        if (code[i] === '\n') result += '\n'
+        i++
+      }
+      if (i < code.length) i += 2
+    } else if (code[i] === '"') {
+      result += ' '
+      i++
+      while (i < code.length && code[i] !== '"') {
+        if (code[i] === '\\') i++
+        i++
+      }
+      i++
+    } else if (code[i] === "'") {
+      result += ' '
+      i++
+      while (i < code.length && code[i] !== "'") {
+        if (code[i] === '\\') i++
+        i++
+      }
+      i++
+    } else {
+      result += code[i]
+      i++
+    }
+  }
+  return result
+}
+
+export function computeMetrics(rawCode: string): CodeMetrics {
+  const code = stripCommentsAndStrings(rawCode)
+  const lines = rawCode.split("\n")
+  const totalLines = lines.length
+  const nonEmptyLines = lines.filter((l) => l.trim().length > 0).length
+
+  const functionCount = (
+    code.match(
+      /\b(void|int|char|float|double|long|short|unsigned|signed|static|extern|const)\s+\*?\s*\w+\s*\([^)]*\)\s*\{/g
+    ) || []
+  ).length
+
+  const elseIfCount = (code.match(/\belse\s+if\s*\(/g) || []).length
+  const ifCount = (code.match(/\bif\s*\(/g) || []).length - elseIfCount
+
+  const forCount = (code.match(/\bfor\s*\(/g) || []).length
+  const whileCount = (code.match(/\bwhile\s*\(/g) || []).length
+  const doCount = (code.match(/\bdo\s*\{/g) || []).length
+  const loops = forCount + whileCount + doCount
+
+  const pointerMatches = code.match(/\b\w+\s*\*\s*\w+(\s*=|\s*;|\s*,|\s*\))/g) || []
+  const pointers = pointerMatches.length
+
+  const arrayMatches = code.match(/\w+\s*\[\s*\d*\s*\]/g) || []
+  const arrays = arrayMatches.length
+
+  const structMatches = code.match(/\bstruct\s+\w+\s*\{/g) || []
+  const structs = structMatches.length
+
+  const mallocCalls = (code.match(/\bmalloc\s*\(/g) || []).length
+  const freeCalls = (code.match(/\bfree\s*\(/g) || []).length
+
+  const includes = (rawCode.match(/#include\s*[<"]/g) || []).length
+
+  const singleLineComments = (rawCode.match(/\/\/.*$/gm) || []).length
+  const multiLineComments = (rawCode.match(/\/\*[\s\S]*?\*\//g) || []).length
+  const comments = singleLineComments + multiLineComments
+
+  return {
+    lines: nonEmptyLines,
+    totalLines,
+    functions: functionCount,
+    ifStatements: ifCount + elseIfCount,
+    loops,
+    arrays,
+    pointers,
+    structs,
+    mallocCalls,
+    freeCalls,
+    includes,
+    comments,
+  }
+}
+

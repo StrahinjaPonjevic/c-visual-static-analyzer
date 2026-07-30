@@ -24,7 +24,7 @@ export function TabBar({
   if (openFilePaths.length === 0) return null
 
   return (
-    <div className="flex h-9 w-full items-center bg-muted/40 border-b overflow-x-auto select-none no-scrollbar">
+    <div className="flex h-9 w-full items-center bg-muted/40 border-b overflow-x-auto select-none no-scrollbar shrink-0">
       {openFilePaths.map((filePath) => {
         const isActive = filePath === activeFilePath
         const isDirty = dirtyFiles.has(filePath)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCppcheckXml, parseGccErrors } from './parsers'
+import { parseCppcheckXml, parseGccErrors, computeMetrics, stripCommentsAndStrings } from './parsers'
 
 describe('parseCppcheckXml', () => {
   it('parses a basic error', () => {
@@ -152,3 +152,57 @@ describe('parseGccErrors', () => {
     expect(parseGccErrors('')).toEqual([])
   })
 })
+
+describe('computeMetrics', () => {
+  it('strips single line comments', () => {
+    const code = 'int x = 5; // for (int i=0; i<10; i++) malloc(10);'
+    const stripped = stripCommentsAndStrings(code)
+    expect(stripped).not.toContain('malloc')
+    expect(stripped).not.toContain('for')
+  })
+
+  it('strips multiline comments', () => {
+    const code = '/* while (1) { char *ptr = malloc(100); free(ptr); } */ int main() {}'
+    const metrics = computeMetrics(code)
+    expect(metrics.loops).toBe(0)
+    expect(metrics.mallocCalls).toBe(0)
+    expect(metrics.freeCalls).toBe(0)
+  })
+
+  it('strips keywords in string literals', () => {
+    const code = 'char msg[] = "for while do malloc free struct int *p";'
+    const metrics = computeMetrics(code)
+    expect(metrics.loops).toBe(0)
+    expect(metrics.mallocCalls).toBe(0)
+    expect(metrics.freeCalls).toBe(0)
+    expect(metrics.pointers).toBe(0)
+    expect(metrics.structs).toBe(0)
+  })
+
+  it('correctly calculates metrics for genuine C code', () => {
+    const code = `#include <stdio.h>
+#include <stdlib.h>
+
+// Ovo je komentar
+int main() {
+    int *ptr = (int *)malloc(sizeof(int) * 10);
+    for (int i = 0; i < 10; i++) {
+        if (i > 5) {
+            printf("ok");
+        }
+    }
+    free(ptr);
+    return 0;
+}`
+    const metrics = computeMetrics(code)
+    expect(metrics.functions).toBe(1)
+    expect(metrics.loops).toBe(1)
+    expect(metrics.ifStatements).toBe(1)
+    expect(metrics.mallocCalls).toBe(1)
+    expect(metrics.freeCalls).toBe(1)
+    expect(metrics.pointers).toBe(1)
+    expect(metrics.includes).toBe(2)
+    expect(metrics.comments).toBe(1)
+  })
+})
+

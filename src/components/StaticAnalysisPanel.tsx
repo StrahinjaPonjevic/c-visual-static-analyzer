@@ -14,6 +14,7 @@ import {
   FileType,
   ChevronDown,
   ChevronRight,
+  Sparkles,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -25,30 +26,25 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import type { CppcheckIssue } from "@/types"
-import { stripCommentsAndStrings } from "@/lib/utils"
+import type { CppcheckIssue, GccError } from "@/types"
+import { computeMetrics } from "@/analysis/parsers"
 
-interface CodeMetrics {
-  lines: number
-  totalLines: number
-  functions: number
-  ifStatements: number
-  loops: number
-  arrays: number
-  pointers: number
-  structs: number
-  mallocCalls: number
-  freeCalls: number
-  includes: number
-  comments: number
+export interface ExplainWithAiItem {
+  line: number
+  message: string
+  severity?: string
+  filePath?: string
+  source: 'cppcheck' | 'gcc'
 }
 
 interface StaticAnalysisPanelProps {
   code: string
   cppcheckIssues: CppcheckIssue[]
+  gccErrors?: GccError[]
   isAnalyzing: boolean
   onRefreshCppcheck: () => void
   onSelectFile?: (filePath: string, line?: number) => void
+  onExplainWithAi?: (item: ExplainWithAiItem) => void
 }
 
 function getFileName(filePath?: string): string {
@@ -57,61 +53,7 @@ function getFileName(filePath?: string): string {
   return parts[parts.length - 1] || filePath
 }
 
-function computeMetrics(rawCode: string): CodeMetrics {
-  const code = stripCommentsAndStrings(rawCode)
-  const lines = rawCode.split("\n")
-  const totalLines = lines.length
-  const nonEmptyLines = lines.filter((l) => l.trim().length > 0).length
-
-  const functionCount = (
-    code.match(
-      /\b(void|int|char|float|double|long|short|unsigned|signed|static|extern|const)\s+\*?\s*\w+\s*\([^)]*\)\s*\{/g
-    ) || []
-  ).length
-
-  const elseIfCount = (code.match(/\belse\s+if\s*\(/g) || []).length
-  const ifCount = (code.match(/\bif\s*\(/g) || []).length - elseIfCount
-
-  const forCount = (code.match(/\bfor\s*\(/g) || []).length
-  const whileCount = (code.match(/\bwhile\s*\(/g) || []).length
-  const doCount = (code.match(/\bdo\s*\{/g) || []).length
-  const loops = forCount + whileCount + doCount
-
-  const pointerMatches = code.match(/\b\w+\s*\*\s*\w+(\s*=|\s*;|\s*,|\s*\))/g) || []
-  const pointers = pointerMatches.length
-
-  const arrayMatches = code.match(/\w+\s*\[\s*\d*\s*\]/g) || []
-  const arrays = arrayMatches.length
-
-  const structMatches = code.match(/\bstruct\s+\w+\s*\{/g) || []
-  const structs = structMatches.length
-
-  const mallocCalls = (code.match(/\bmalloc\s*\(/g) || []).length
-  const freeCalls = (code.match(/\bfree\s*\(/g) || []).length
-
-  const includes = (rawCode.match(/#include\s*[<"]/g) || []).length
-
-  const singleLineComments = (rawCode.match(/\/\/.*$/gm) || []).length
-  const multiLineComments = (rawCode.match(/\/\*[\s\S]*?\*\//g) || []).length
-  const comments = singleLineComments + multiLineComments
-
-  return {
-    lines: nonEmptyLines,
-    totalLines,
-    functions: functionCount,
-    ifStatements: ifCount + elseIfCount,
-    loops,
-    arrays,
-    pointers,
-    structs,
-    mallocCalls,
-    freeCalls,
-    includes,
-    comments,
-  }
-}
-
-function getSeverityColor(severity: CppcheckIssue["severity"]): string {
+function getSeverityColor(severity: string): string {
   switch (severity) {
     case "error": return "text-red-400 border-red-500/30"
     case "warning": return "text-amber-400 border-amber-500/30"
@@ -119,28 +61,64 @@ function getSeverityColor(severity: CppcheckIssue["severity"]): string {
     case "performance": return "text-purple-400 border-purple-500/30"
     case "portability": return "text-cyan-400 border-cyan-500/30"
     case "information": return "text-muted-foreground"
+    default: return "text-muted-foreground"
   }
 }
 
-function getSeverityIcon(severity: CppcheckIssue["severity"]) {
+function getSeverityIcon(severity: string) {
   switch (severity) {
     case "error": return <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
     case "warning": return <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
     case "style": return <CheckCircle className="h-4 w-4 text-blue-400 shrink-0" />
     case "performance": return <CheckCircle className="h-4 w-4 text-purple-400 shrink-0" />
     case "portability": return <AlertCircle className="h-4 w-4 text-cyan-400 shrink-0" />
-    case "information": return <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+    default: return <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
   }
 }
 
-export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefreshCppcheck, onSelectFile }: StaticAnalysisPanelProps) {
+export function StaticAnalysisPanel({
+  code,
+  cppcheckIssues,
+  gccErrors = [],
+  isAnalyzing,
+  onRefreshCppcheck,
+  onSelectFile,
+  onExplainWithAi,
+}: StaticAnalysisPanelProps) {
   const metrics = useMemo(() => computeMetrics(code), [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
   const [issuesOpen, setIssuesOpen] = useState(true)
 
-  const errorCount = cppcheckIssues.filter((i) => i.severity === "error").length
-  const warningCount = cppcheckIssues.filter((i) => i.severity === "warning").length
+  // Merge Cppcheck issues and GCC errors into a single unified list
+  const combinedIssues = useMemo(() => {
+    const list: ExplainWithAiItem[] = []
+
+    for (const issue of cppcheckIssues) {
+      list.push({
+        line: issue.line,
+        message: issue.message,
+        severity: issue.severity,
+        filePath: issue.filePath,
+        source: 'cppcheck',
+      })
+    }
+
+    for (const err of gccErrors) {
+      list.push({
+        line: err.line,
+        message: err.message,
+        severity: err.type,
+        filePath: err.filePath,
+        source: 'gcc',
+      })
+    }
+
+    return list
+  }, [cppcheckIssues, gccErrors])
+
+  const errorCount = combinedIssues.filter((i) => i.severity === "error").length
+  const warningCount = combinedIssues.filter((i) => i.severity === "warning" || i.severity === "style" || i.severity === "performance" || i.severity === "portability").length
 
   const metricCards = [
     { icon: Hash, label: "Linija koda", value: metrics.lines, sub: `Ukupno ${metrics.totalLines}` },
@@ -189,7 +167,7 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
             <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
               {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
               Problemi
-              {cppcheckIssues.length > 0 && (
+              {combinedIssues.length > 0 && (
                 <span className="text-muted-foreground/60 font-normal">
                   ({errorCount > 0 && warningCount > 0
                     ? `${errorCount} grešaka, ${warningCount} upozorenja`
@@ -213,7 +191,7 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2">
-              {cppcheckIssues.length === 0 ? (
+              {combinedIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle className="h-8 w-8 text-emerald-400 mb-2" />
                   <p className="text-sm font-medium text-muted-foreground">Nema pronađenih problema</p>
@@ -221,9 +199,9 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {cppcheckIssues.map((issue, index) => (
+                  {combinedIssues.map((issue, index) => (
                     <Card
-                      key={`${issue.id}-${issue.line}-${index}`}
+                      key={`${issue.source}-${issue.line}-${index}`}
                       className="border shadow-none hover:bg-muted/40 transition-colors cursor-pointer"
                       onClick={() => {
                         if (issue.filePath && onSelectFile) {
@@ -233,31 +211,44 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
                     >
                       <CardContent className="p-3">
                         <div className="flex items-start gap-2.5">
-                          {getSeverityIcon(issue.severity)}
+                          {getSeverityIcon(issue.severity || 'error')}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold text-purple-400">
+                                {issue.source.toUpperCase()}
+                              </Badge>
                               {issue.filePath && (
                                 <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-semibold text-blue-400">
                                   {getFileName(issue.filePath)}
                                 </Badge>
                               )}
-                              <span className="text-xs text-muted-foreground font-medium">
-                                Linija {issue.line}
-                                {issue.column > 0 && `:${issue.column}`}
-                              </span>
+                              {issue.line > 0 && (
+                                <span className="text-xs text-muted-foreground font-medium">
+                                  Linija {issue.line}
+                                </span>
+                              )}
                               <Badge
                                 variant="outline"
-                                className={`text-[10px] px-1.5 py-0 h-4 font-normal ${getSeverityColor(issue.severity)}`}
+                                className={`text-[10px] px-1.5 py-0 h-4 font-normal ${getSeverityColor(issue.severity || 'error')}`}
                               >
                                 {issue.severity}
                               </Badge>
-                              {issue.cwe && (
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
-                                  CWE-{issue.cwe}
-                                </Badge>
-                              )}
                             </div>
-                            <p className="text-sm leading-relaxed break-words">{issue.message}</p>
+                            <p className="text-sm leading-relaxed break-words mb-2">{issue.message}</p>
+                            <div className="flex justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 gap-1 px-2 text-[11px] font-medium hover:bg-primary/20 hover:text-primary border-primary/30"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onExplainWithAi?.(issue)
+                                }}
+                              >
+                                <Sparkles className="h-3 w-3 text-amber-400" />
+                                <span>Objasni sa AI</span>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -272,3 +263,4 @@ export function StaticAnalysisPanel({ code, cppcheckIssues, isAnalyzing, onRefre
     </div>
   )
 }
+

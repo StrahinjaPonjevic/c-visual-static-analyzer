@@ -441,7 +441,7 @@ ipcMain.handle('cppcheck:analyze-project', async (_event, projectDir: string): P
   }
 })
 
-ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<CppcheckResult> => {
+ipcMain.handle('cppcheck:analyze', async (_event, code: string, originalFilePath?: string): Promise<CppcheckResult> => {
   if (typeof code !== 'string') {
     return { issues: [], success: false, error: 'Invalid input' }
   }
@@ -495,7 +495,12 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string): Promise<Cppchec
     }
 
     const xmlOutput = stderr || stdout
-    const issues = parseCppcheckXml(xmlOutput)
+    const parsedIssues = parseCppcheckXml(xmlOutput)
+    const targetPath = originalFilePath || undefined
+    const issues = parsedIssues.map(issue => ({
+      ...issue,
+      filePath: targetPath || issue.filePath,
+    }))
 
     return { issues, success: true }
   } catch (err) {
@@ -561,7 +566,7 @@ ipcMain.handle('gcc:check', async (): Promise<{ detected: boolean; version?: str
 
 // ---- GCC compilation ----
 
-ipcMain.handle('gcc:compile', async (_event, code: string) => {
+ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: string) => {
   const tempDir = os.tmpdir()
   const timestamp = Date.now()
   const cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
@@ -578,6 +583,23 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
 
   const cStandard = settings.compiler.cStandard || 'c11'
   const extraFlags = sanitizeFlags(settings.compiler.extraFlags)
+
+  const hasStdioH = /#include\s*<stdio\.h>/.test(code)
+  const targetFilePath = originalFilePath || undefined
+
+  const normalizeErrors = (rawErrors: GccError[]): GccError[] => {
+    return rawErrors.map((err) => {
+      let line = err.line
+      if (!hasStdioH && line > 0) {
+        line = Math.max(1, line - 1)
+      }
+      return {
+        ...err,
+        line,
+        filePath: targetFilePath || err.filePath,
+      }
+    })
+  }
 
   try {
     const injectedCode = injectUnbuffer(code)
@@ -597,7 +619,7 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
       })
 
       const stderr = result.stderr || ''
-      const warnings = parseGccErrors(stderr)
+      const warnings = normalizeErrors(parseGccErrors(stderr))
 
       return {
         success: true,
@@ -620,23 +642,22 @@ ipcMain.handle('gcc:compile', async (_event, code: string) => {
 
       const stderr = execErr.stderr || ''
       const stdout = execErr.stdout || ''
-      const errors = parseGccErrors(stderr)
+      const rawErrors = parseGccErrors(stderr)
 
-      // Ako nijedna linija nije parsirana, ali GCC je vratio grešku
-      if (errors.length === 0 && stderr.trim()) {
+      if (rawErrors.length === 0 && stderr.trim()) {
         const lines = stderr.trim().split('\n')
         for (const line of lines) {
           const cleaned = line.replace(/^(?:[a-zA-Z]:)?[^:]+:\d+:\d+:\s+(error|warning):\s*/, '')
           if (cleaned !== line) {
-            errors.push({ line: 0, column: 0, type: 'error', message: cleaned })
+            rawErrors.push({ line: 0, column: 0, type: 'error', message: cleaned })
           }
         }
-        if (errors.length === 0) {
-          errors.push({ line: 0, column: 0, type: 'error', message: lines[lines.length - 1] })
+        if (rawErrors.length === 0) {
+          rawErrors.push({ line: 0, column: 0, type: 'error', message: lines[lines.length - 1] })
         }
       }
 
-      // Non-zero izlazni kod = GCC je pao
+      const errors = normalizeErrors(rawErrors)
       const hasError = typeof execErr.code === 'number' || errors.some(e => e.type === 'error')
 
       return {
@@ -996,6 +1017,11 @@ function buildMenu(win: BrowserWindow) {
       label: 'File',
       submenu: [
         {
+          label: 'New File',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => win.webContents.send('menu:new-file'),
+        },
+        {
           label: 'Open C File...',
           accelerator: 'CmdOrCtrl+O',
           click: () => win.webContents.send('menu:open-file'),
@@ -1041,6 +1067,10 @@ function createWindow() {
   const iconName = process.platform === 'win32' ? 'logo.ico' : 'logo.png'
 
   win = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
     icon: path.join(process.env.VITE_PUBLIC, iconName),
     frame: false,
     titleBarStyle: 'hidden',

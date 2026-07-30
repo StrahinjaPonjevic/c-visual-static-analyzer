@@ -12,9 +12,12 @@ import { SidePanel } from "@/components/SidePanel"
 import { StatusBar } from "@/components/StatusBar"
 import { OutputPanel, type TerminalLine } from "@/components/OutputPanel"
 import { UnsavedChangesDialog } from "@/components/UnsavedChangesDialog"
+import { DependencyDialog } from "@/components/DependencyDialog"
+import type { ExplainWithAiItem } from "@/components/StaticAnalysisPanel"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { FileExplorer } from "@/components/FileExplorer"
 import { TabBar } from "@/components/TabBar"
+import { EmptyState } from "@/components/EmptyState"
 import {
   Dialog,
   DialogContent,
@@ -38,14 +41,14 @@ export interface Message {
   isStreaming?: boolean
 }
 
-const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš studentima da:
+const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš korisnicima da:
 - Razumeju strukturu i logiku C koda
 - Pronađu i isprave greške (sintaktičke, logičke, memorijske)
 - Nauče najbolje prakse u C programiranju
 - Razumeju pokazivače, strukture, dinamičku alokaciju memorije
 - Interpretiraju GCC warning i error poruke
 
-Odgovaraj kratko i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno. Budi edukativan i strpljiv sa početnicima.`
+Odgovaraj kratko, stručno i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno.`
 
 export function App() {
   const [mode, setMode] = useState<'single' | 'project'>('single')
@@ -97,27 +100,28 @@ export function App() {
     return dirtyFiles.has(activeFilePath)
   }, [activeFilePath, dirtyFiles])
 
-  // ---- GCC detection ----
+  // ---- GCC & Cppcheck detection & Dialog ----
   const [gccDetected, setGccDetected] = useState<boolean | undefined>(undefined)
   const [gccVersion, setGccVersion] = useState<string | undefined>(undefined)
+  const [cppcheckDetected, setCppcheckDetected] = useState<boolean | undefined>(undefined)
+  const [cppcheckVersion, setCppcheckVersion] = useState<string | undefined>(undefined)
+  const [dependencyDialogOpen, setDependencyDialogOpen] = useState(false)
 
-  useEffect(() => {
+  const handleRecheckDependencies = useCallback(() => {
     window.api.checkGcc().then(result => {
       setGccDetected(result.detected)
       setGccVersion(result.version)
     })
-  }, [])
-
-  // ---- Cppcheck detection ----
-  const [cppcheckDetected, setCppcheckDetected] = useState<boolean | undefined>(undefined)
-  const [cppcheckVersion, setCppcheckVersion] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
     window.api.checkCppcheck().then(result => {
       setCppcheckDetected(result.detected)
       setCppcheckVersion(result.version)
     })
   }, [])
+
+  useEffect(() => {
+    handleRecheckDependencies()
+  }, [handleRecheckDependencies])
+
 
   // ---- Settings ----
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
@@ -176,7 +180,7 @@ export function App() {
   const runCppcheckSingle = useCallback(async (codeToAnalyze: string) => {
     setIsAnalyzing(true)
     try {
-      const result = await window.api.analyzeCode(codeToAnalyze)
+      const result = await window.api.analyzeCode(codeToAnalyze, activeFilePathRef.current || undefined)
       if (result.success) {
         setCppcheckIssues(result.issues as CppcheckIssue[])
       } else {
@@ -411,6 +415,94 @@ export function App() {
     setIsAiLoading(false)
   }, [])
 
+  const handleExplainWithAi = useCallback((item: ExplainWithAiItem) => {
+    setActiveSideTab('ai')
+    setShowSidePanel(true)
+
+    let lineContent = ""
+    let codeContext = ""
+    const codeLines = codeRef.current.split('\n')
+
+    if (item.line > 0 && item.line <= codeLines.length) {
+      lineContent = codeLines[item.line - 1]
+      const startLine = Math.max(0, item.line - 4)
+      const endLine = Math.min(codeLines.length, item.line + 3)
+      codeContext = codeLines.slice(startLine, endLine).map((l, idx) => `${startLine + idx + 1}: ${l}`).join('\n')
+    }
+
+    const sourceName = item.source === 'gcc' ? 'GCC prevodioca' : 'Cppcheck statičke analize'
+    const fileName = item.filePath ? item.filePath.split(/[/\\]/).pop() : (activeFilePathRef.current ? activeFilePathRef.current.split(/[/\\]/).pop() : 'main.c')
+
+    const prompt = `Molim te da mi objasniš sledeću poruku iz ${sourceName}:
+
+Fajl: ${fileName}
+Linija: ${item.line}
+Nivo: ${item.severity || 'problem'}
+Poruka greške: "${item.message}"
+
+Tačna linija koda (Linija ${item.line}):
+\`\`\`c
+${lineContent || '(Nepoznata linija)'}
+\`\`\`
+
+Kontekst koda oko linije ${item.line}:
+\`\`\`c
+${codeContext || codeRef.current}
+\`\`\`
+
+Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je ispravim u svom kodu na jasan način.`
+
+    const userMessage: Message = {
+      id: aiMessageIdRef.current++,
+      role: "user",
+      content: prompt,
+    }
+
+    const assistantMessage: Message = {
+      id: aiMessageIdRef.current++,
+      role: "assistant",
+      content: "",
+      isStreaming: true,
+    }
+
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
+    setIsAiLoading(true)
+    setAiError(null)
+    aiStreamingRef.current = true
+    aiThinkingChunksRef.current = ""
+    aiContentChunksRef.current = ""
+
+    const apiMessages: { role: string; content: string }[] = [
+      { role: "system", content: SYSTEM_PROMPT },
+    ]
+
+    if (modeRef.current === 'project' && projectPathRef.current) {
+      apiMessages.push({
+        role: "system",
+        content: `Korisnik radi u Project Mode okruženju. Projekat: ${projectName || projectPathRef.current}. Aktivni fajl: ${activeFilePathRef.current || 'nema'}.`,
+      })
+    }
+
+    if (codeRef.current.trim()) {
+      apiMessages.push({
+        role: "system",
+        content: `Trenutni kod u editoru (${activeFilePathRef.current || 'fajl'}):\n\`\`\`c\n${codeRef.current}\n\`\`\``,
+      })
+    }
+
+    for (const msg of messages) {
+      if (msg.id === 1) continue
+      if (msg.isStreaming) continue
+      if (!msg.content) continue
+      apiMessages.push({ role: msg.role, content: msg.content })
+    }
+
+    apiMessages.push({ role: "user", content: prompt })
+
+    window.api.sendChatMessage(apiMessages)
+  }, [projectName, messages])
+
+
   // ---- GCC compile & run state ----
   const [isCompiling, setIsCompiling] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
@@ -439,6 +531,7 @@ export function App() {
 
   const handleCodeChange = useCallback((newCode: string) => {
     setCode(newCode)
+    setGccErrors([])
     if (activeFilePathRef.current) {
       const activePath = activeFilePathRef.current
       setFileContents((prev) => ({
@@ -498,7 +591,13 @@ export function App() {
   const handleSave = useCallback(async () => {
     const latestCode = codeRef.current
     const targetPath = activeFilePathRef.current
-    const isUntitled = !targetPath || targetPath.startsWith('untitled_') || (!targetPath.includes('/') && !targetPath.includes('\\'))
+    const isUntitled = !targetPath ||
+      targetPath.startsWith('untitled_') ||
+      targetPath.includes('cppcheck_') ||
+      targetPath.includes('gcc_') ||
+      targetPath.includes('/tmp/') ||
+      targetPath.includes('\\Temp\\') ||
+      (!targetPath.includes('/') && !targetPath.includes('\\'))
 
     if (!isUntitled && targetPath) {
       const result = await window.api.saveFile(targetPath, latestCode)
@@ -638,18 +737,29 @@ export function App() {
   }, [runCppcheckSingle])
 
   useEffect(() => {
+    const cleanupNew = window.api.onMenuNew(() => handleNew())
     const cleanupOpen = window.api.onMenuOpen(() => handleOpen())
     const cleanupOpenFolder = window.api.onMenuOpenFolder(() => handleOpenFolder())
     const cleanupCloseFolder = window.api.onMenuCloseFolder(() => handleCloseProject())
     const cleanupSave = window.api.onMenuSave(() => handleSave())
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        handleNew()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+
     return () => {
+      cleanupNew()
       cleanupOpen()
       cleanupOpenFolder()
       cleanupCloseFolder()
       cleanupSave()
+      window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [handleOpen, handleOpenFolder, handleCloseProject, handleSave])
+  }, [handleNew, handleOpen, handleOpenFolder, handleCloseProject, handleSave])
 
   const handleToggleAI = useCallback(() => {
     if (showSidePanel && activeSideTab === "ai") {
@@ -721,7 +831,7 @@ export function App() {
         }
         result = await window.api.compileProject(projectPathRef.current)
       } else {
-        result = await window.api.compileCode(codeRef.current)
+        result = await window.api.compileCode(codeRef.current, activeFilePathRef.current || undefined)
       }
 
       setGccErrors(result.errors)
@@ -932,7 +1042,7 @@ export function App() {
 
           <ResizablePanel defaultSize={showExplorer ? (showSidePanel ? "52%" : "80%") : (showSidePanel ? "72%" : "100%")} minSize={300}>
             <ResizablePanelGroup orientation="vertical">
-              <ResizablePanel defaultSize="70%" minSize={200} className="flex flex-col">
+              <ResizablePanel defaultSize="70%" minSize={100} className="flex flex-col overflow-hidden">
                 <TabBar
                   openFilePaths={openFilePaths}
                   activeFilePath={activeFilePath}
@@ -940,20 +1050,28 @@ export function App() {
                   onSelectTab={handleSelectFile}
                   onCloseTab={handleCloseTab}
                 />
-                <div className="flex-1">
-                  <Editor
-                    value={code}
-                    onChange={handleCodeChange}
-                    onCursorChange={(line, column) => {
-                      setCursorLine(line)
-                      setCursorColumn(column)
-                    }}
-                    markers={activeMarkers}
-                    fontSize={settings.editor.fontSize}
-                    tabSize={settings.editor.tabSize}
-                    wordWrap={settings.editor.wordWrap}
-                    filePath={activeFilePath}
-                  />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  {openFilePaths.length === 0 || !activeFilePath ? (
+                    <EmptyState
+                      onNew={handleNew}
+                      onOpen={handleOpen}
+                      onOpenFolder={handleOpenFolder}
+                    />
+                  ) : (
+                    <Editor
+                      value={code}
+                      onChange={handleCodeChange}
+                      onCursorChange={(line, column) => {
+                        setCursorLine(line)
+                        setCursorColumn(column)
+                      }}
+                      markers={activeMarkers}
+                      fontSize={settings.editor.fontSize}
+                      tabSize={settings.editor.tabSize}
+                      wordWrap={settings.editor.wordWrap}
+                      filePath={activeFilePath}
+                    />
+                  )}
                 </div>
               </ResizablePanel>
               <ResizableHandle withHandle />
@@ -976,6 +1094,7 @@ export function App() {
                   activeTab={activeSideTab}
                   code={code}
                   cppcheckIssues={cppcheckIssues}
+                  gccErrors={gccErrors}
                   isAnalyzing={isAnalyzing}
                   onRefreshCppcheck={handleRefreshCppcheck}
                   messages={messages}
@@ -986,6 +1105,7 @@ export function App() {
                   onAiSend={handleAiSend}
                   onAiStop={handleAiStop}
                   onSelectFile={handleSelectFile}
+                  onExplainWithAi={handleExplainWithAi}
                 />
               </ResizablePanel>
             </>
@@ -1001,6 +1121,17 @@ export function App() {
           gccVersion={gccVersion}
           cppcheckDetected={cppcheckDetected}
           cppcheckVersion={cppcheckVersion}
+          onOpenDependencyDialog={() => setDependencyDialogOpen(true)}
+        />
+
+        <DependencyDialog
+          open={dependencyDialogOpen}
+          onOpenChange={setDependencyDialogOpen}
+          gccDetected={gccDetected}
+          gccVersion={gccVersion}
+          cppcheckDetected={cppcheckDetected}
+          cppcheckVersion={cppcheckVersion}
+          onRecheck={handleRecheckDependencies}
         />
 
         <UnsavedChangesDialog

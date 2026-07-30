@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import type { CodeMarker } from '@/types'
 
@@ -34,6 +34,8 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         return () => disposable.dispose()
     }, [editorInstance, onCursorChange])
 
+    const markersKey = useMemo(() => JSON.stringify(markers ?? []), [markers])
+
     useEffect(() => {
         if (!editorInstance) return
 
@@ -52,7 +54,7 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         }))
 
         decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, newDecorations)
-    }, [editorInstance, markers])
+    }, [editorInstance, markersKey])
 
     useEffect(() => {
         if (!editorInstance) return

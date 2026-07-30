@@ -1,6 +1,6 @@
 import { AIPanel } from "@/components/AIPanel"
-import { StaticAnalysisPanel } from "@/components/StaticAnalysisPanel"
-import type { CppcheckIssue } from "@/types"
+import { StaticAnalysisPanel, type ExplainWithAiItem } from "@/components/StaticAnalysisPanel"
+import type { CppcheckIssue, GccError } from "@/types"
 import type { Message } from "@/App"
 import { cn } from "@/lib/utils"
 
@@ -8,6 +8,7 @@ interface SidePanelProps {
   activeTab: "ai" | "analysis"
   code: string
   cppcheckIssues: CppcheckIssue[]
+  gccErrors?: GccError[]
   isAnalyzing: boolean
   onRefreshCppcheck: () => void
   messages: Message[]
@@ -18,12 +19,14 @@ interface SidePanelProps {
   onAiSend: () => void
   onAiStop: () => void
   onSelectFile?: (filePath: string, line?: number) => void
+  onExplainWithAi?: (item: ExplainWithAiItem) => void
 }
 
 export function SidePanel({
   activeTab,
   code,
   cppcheckIssues,
+  gccErrors = [],
   isAnalyzing,
   onRefreshCppcheck,
   messages,
@@ -34,6 +37,7 @@ export function SidePanel({
   onAiSend,
   onAiStop,
   onSelectFile,
+  onExplainWithAi,
 }: SidePanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-sidebar">
@@ -53,11 +57,14 @@ export function SidePanel({
         <StaticAnalysisPanel
           code={code}
           cppcheckIssues={cppcheckIssues}
+          gccErrors={gccErrors}
           isAnalyzing={isAnalyzing}
           onRefreshCppcheck={onRefreshCppcheck}
           onSelectFile={onSelectFile}
+          onExplainWithAi={onExplainWithAi}
         />
       </div>
     </div>
   )
 }
+

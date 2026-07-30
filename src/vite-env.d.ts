@@ -13,13 +13,14 @@ interface Window {
         deleteProjectItem: (targetPath: string) => Promise<{ success: boolean; error?: string }>
         compileProject: (projectDir: string) => Promise<import('./types').GccResult>
         analyzeProject: (projectDir: string) => Promise<{ issues: import('./types').CppcheckIssue[]; success: boolean; error?: string }>
+        onMenuNew: (callback: () => void) => () => void
         onMenuOpen: (callback: () => void) => () => void
         onMenuOpenFolder: (callback: () => void) => () => void
         onMenuCloseFolder: (callback: () => void) => () => void
         onMenuSave: (callback: () => void) => () => void
         onFileExternallyChanged: (callback: (data: { filePath: string; content: string }) => void) => () => void
         saveAsFile: (content: string, defaultPath?: string) => Promise<string | null>
-        analyzeCode: (code: string) => Promise<{
+        analyzeCode: (code: string, originalFilePath?: string) => Promise<{
             issues: {
                 id: string
                 severity: 'error' | 'warning' | 'style' | 'performance' | 'information' | 'portability'
@@ -41,7 +42,7 @@ interface Window {
         // GCC check, compile & run
         checkGcc: () => Promise<{ detected: boolean; version?: string }>
         checkCppcheck: () => Promise<{ detected: boolean; version?: string }>
-        compileCode: (code: string) => Promise<import('./types').GccResult>
+        compileCode: (code: string, originalFilePath?: string) => Promise<import('./types').GccResult>
         runProgram: (exePath: string) => Promise<{ success: boolean; error?: string }>
         sendStdin: (data: string) => Promise<{ success: boolean; error?: string }>
         killProgram: () => Promise<{ success: boolean; error?: string }>

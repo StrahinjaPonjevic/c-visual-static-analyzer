@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld('api', {
     deleteProjectItem: (targetPath: string) => ipcRenderer.invoke('project:delete', targetPath) as Promise<{ success: boolean; error?: string }>,
     compileProject: (projectDir: string) => ipcRenderer.invoke('gcc:compile-project', projectDir) as Promise<GccResult>,
     analyzeProject: (projectDir: string) => ipcRenderer.invoke('cppcheck:analyze-project', projectDir) as Promise<{ issues: import('../src/types').CppcheckIssue[]; success: boolean; error?: string }>,
+    onMenuNew: (callback: () => void) => {
+        const handler = () => callback()
+        ipcRenderer.on('menu:new-file', handler)
+        return () => ipcRenderer.removeListener('menu:new-file', handler)
+    },
     onMenuOpen: (callback: () => void) => {
         const handler = () => callback()
         ipcRenderer.on('menu:open-file', handler)
@@ -40,7 +45,7 @@ contextBridge.exposeInMainWorld('api', {
         ipcRenderer.on('file:externally-changed', handler)
         return () => ipcRenderer.removeListener('file:externally-changed', handler)
     },
-    analyzeCode: (code: string) => ipcRenderer.invoke('cppcheck:analyze', code),
+    analyzeCode: (code: string, originalFilePath?: string) => ipcRenderer.invoke('cppcheck:analyze', code, originalFilePath),
     minimizeWindow: () => ipcRenderer.send('window:minimize'),
     maximizeWindow: () => ipcRenderer.send('window:maximize'),
     closeWindow: () => ipcRenderer.send('window:close'),
@@ -59,7 +64,7 @@ contextBridge.exposeInMainWorld('api', {
     // GCC check, compile & run
     checkGcc: () => ipcRenderer.invoke('gcc:check') as Promise<{ detected: boolean; version?: string }>,
     checkCppcheck: () => ipcRenderer.invoke('cppcheck:check') as Promise<{ detected: boolean; version?: string }>,
-    compileCode: (code: string) => ipcRenderer.invoke('gcc:compile', code) as Promise<GccResult>,
+    compileCode: (code: string, originalFilePath?: string) => ipcRenderer.invoke('gcc:compile', code, originalFilePath) as Promise<GccResult>,
     runProgram: (exePath: string) => ipcRenderer.invoke('program:run', exePath) as Promise<{ success: boolean; error?: string }>,
     sendStdin: (data: string) => ipcRenderer.invoke('program:stdin', data) as Promise<{ success: boolean; error?: string }>,
     killProgram: () => ipcRenderer.invoke('program:kill') as Promise<{ success: boolean; error?: string }>,
