@@ -21,6 +21,8 @@ export interface GccResult {
   stdout: string
   stderr: string
   exePath?: string
+  cwd?: string
+  savedFilePath?: string
   error?: string
 }
 

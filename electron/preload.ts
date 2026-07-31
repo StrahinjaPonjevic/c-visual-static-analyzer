@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('api', {
     createProjectFolder: (targetPath: string) => ipcRenderer.invoke('project:folder-create', targetPath) as Promise<{ success: boolean; error?: string }>,
     renameProjectItem: (oldPath: string, newPath: string) => ipcRenderer.invoke('project:rename', oldPath, newPath) as Promise<{ success: boolean; error?: string }>,
     deleteProjectItem: (targetPath: string) => ipcRenderer.invoke('project:delete', targetPath) as Promise<{ success: boolean; error?: string }>,
-    compileProject: (projectDir: string) => ipcRenderer.invoke('gcc:compile-project', projectDir) as Promise<GccResult>,
+    compileProject: (projectDir: string, activeFilePath?: string) => ipcRenderer.invoke('gcc:compile-project', projectDir, activeFilePath) as Promise<GccResult>,
     analyzeProject: (projectDir: string) => ipcRenderer.invoke('cppcheck:analyze-project', projectDir) as Promise<{ issues: import('../src/types').CppcheckIssue[]; success: boolean; error?: string }>,
     onMenuNew: (callback: () => void) => {
         const handler = () => callback()
@@ -65,7 +65,7 @@ contextBridge.exposeInMainWorld('api', {
     checkGcc: () => ipcRenderer.invoke('gcc:check') as Promise<{ detected: boolean; version?: string }>,
     checkCppcheck: () => ipcRenderer.invoke('cppcheck:check') as Promise<{ detected: boolean; version?: string }>,
     compileCode: (code: string, originalFilePath?: string) => ipcRenderer.invoke('gcc:compile', code, originalFilePath) as Promise<GccResult>,
-    runProgram: (exePath: string) => ipcRenderer.invoke('program:run', exePath) as Promise<{ success: boolean; error?: string }>,
+    runProgram: (exePath: string, cwd?: string) => ipcRenderer.invoke('program:run', exePath, cwd) as Promise<{ success: boolean; error?: string }>,
     sendStdin: (data: string) => ipcRenderer.invoke('program:stdin', data) as Promise<{ success: boolean; error?: string }>,
     killProgram: () => ipcRenderer.invoke('program:kill') as Promise<{ success: boolean; error?: string }>,
 

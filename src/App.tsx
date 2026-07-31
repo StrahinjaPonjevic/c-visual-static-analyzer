@@ -564,7 +564,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     setActiveFilePath(filePath)
   }, [openFilePaths])
 
-  const handleCloseTab = useCallback((filePath: string) => {
+  const forceCloseTab = useCallback((filePath: string) => {
     setOpenFilePaths((prev) => {
       const next = prev.filter((p) => p !== filePath)
       if (activeFilePathRef.current === filePath) {
@@ -578,6 +578,11 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       }
       return next
     })
+    setFileContents((prev) => {
+      const updated = { ...prev }
+      delete updated[filePath]
+      return updated
+    })
   }, [])
 
   const handleRefreshTree = useCallback(async () => {
@@ -587,7 +592,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     }
   }, [])
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (): Promise<string | null> => {
     const latestCode = codeRef.current
     const targetPath = activeFilePathRef.current
     const isUntitled = !targetPath ||
@@ -608,7 +613,9 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         if (modeRef.current === 'project' && projectPathRef.current) {
           runCppcheckProject(projectPathRef.current)
         }
+        return targetPath
       }
+      return null
     } else {
       const defaultDir = projectPathRef.current || undefined
       const newPath = await window.api.saveAsFile(latestCode, defaultDir)
@@ -631,9 +638,45 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
           handleRefreshTree()
           runCppcheckProject(projectPathRef.current)
         }
+        return newPath
       }
+      return null
     }
   }, [runCppcheckProject, handleRefreshTree])
+
+  const handleCloseTab = useCallback((filePath: string) => {
+    const fState = fileContentsRef.current[filePath]
+    const isDirtyFile = fState ? fState.content !== fState.savedContent : false
+
+    if (!isDirtyFile) {
+      forceCloseTab(filePath)
+      return
+    }
+
+    if (activeFilePathRef.current !== filePath) {
+      setActiveFilePath(filePath)
+      if (fState) {
+        setCode(fState.content)
+      }
+    }
+
+    setShowUnsavedDialog(true)
+    setUnsavedAction({
+      resolve: async (action) => {
+        if (action === 'save') {
+          const savedPath = await handleSave()
+          if (savedPath) {
+            forceCloseTab(savedPath)
+            if (filePath !== savedPath) {
+              forceCloseTab(filePath)
+            }
+          }
+        } else if (action === 'discard') {
+          forceCloseTab(filePath)
+        }
+      }
+    })
+  }, [forceCloseTab, handleSave])
 
   const handleNew = useCallback(() => {
     const newUntitledName = `untitled_${Date.now()}.c`
@@ -817,20 +860,58 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
 
     try {
       let result: GccResult
+      const compileTargetFilePath = activeFilePathRef.current
+      const compileCodeContent = codeRef.current
+
       if (modeRef.current === 'project' && projectPathRef.current) {
         // Save all open dirty files in project before compiling
         for (const [fPath, fState] of Object.entries(fileContentsRef.current)) {
           if (fState.content !== fState.savedContent) {
-            await window.api.saveFile(fPath, fState.content)
-            setFileContents((prev) => ({
-              ...prev,
-              [fPath]: { content: fState.content, savedContent: fState.content },
-            }))
+            const saveRes = await window.api.saveFile(fPath, fState.content)
+            if (saveRes.success) {
+              setFileContents((prev) => ({
+                ...prev,
+                [fPath]: { content: fState.content, savedContent: fState.content },
+              }))
+            } else {
+              setTerminalOutput((prev) => [...prev, {
+                id: terminalIdRef.current++,
+                type: "system",
+                text: `Greška pri čuvanju fajla "${fPath}": ${saveRes.error}`,
+              }])
+              compilingRef.current = false
+              setIsCompiling(false)
+              return
+            }
           }
         }
-        result = await window.api.compileProject(projectPathRef.current)
+        result = await window.api.compileProject(projectPathRef.current, compileTargetFilePath || undefined)
       } else {
-        result = await window.api.compileCode(codeRef.current, activeFilePathRef.current || undefined)
+        result = await window.api.compileCode(compileCodeContent, compileTargetFilePath || undefined)
+        if (result.savedFilePath) {
+          const newPath = result.savedFilePath
+
+          setOpenFilePaths((prev) => {
+            if (compileTargetFilePath && prev.includes(compileTargetFilePath)) {
+              return prev.map((p) => (p === compileTargetFilePath ? newPath : p))
+            }
+            return prev.includes(newPath) ? prev : [...prev, newPath]
+          })
+
+          setFileContents((prev) => {
+            const updated = { ...prev }
+            if (compileTargetFilePath && compileTargetFilePath !== newPath && updated[compileTargetFilePath]) {
+              delete updated[compileTargetFilePath]
+            }
+            updated[newPath] = { content: compileCodeContent, savedContent: compileCodeContent }
+            return updated
+          })
+
+          // Only switch active tab to newPath if user hasn't deliberately switched to another tab during compile
+          if (activeFilePathRef.current === compileTargetFilePath || !activeFilePathRef.current) {
+            setActiveFilePath(newPath)
+          }
+        }
       }
 
       setGccErrors(result.errors)
@@ -877,7 +958,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
 
       exePathRef.current = result.exePath || null
 
-      const runResult = await window.api.runProgram(result.exePath!)
+      const runResult = await window.api.runProgram(result.exePath!, result.cwd)
       if (!runResult.success) {
         setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,

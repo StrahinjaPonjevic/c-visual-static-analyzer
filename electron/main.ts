@@ -65,6 +65,16 @@ function sanitizeFlags(flagsStr: string | undefined): string[] {
   return safeTokens
 }
 
+function hasMainFunction(content: string): boolean {
+  if (!content || typeof content !== 'string') return false
+  const clean = content
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*/g, '')
+    .replace(/"(?:[^"\\]|\\.)*"/g, '')
+    .replace(/'(?:[^'\\]|\\.)*'/g, '')
+  return /\b(int|void)\s+main\s*\(/.test(clean)
+}
+
 interface CppcheckResult {
   issues: CppcheckIssue[]
   success: boolean
@@ -312,7 +322,7 @@ ipcMain.handle('project:delete', async (_event, targetPath: string) => {
   }
 })
 
-ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
+ipcMain.handle('gcc:compile-project', async (_event, projectDir: string, activeFilePath?: string) => {
   if (!projectDir || !isPathSafe(projectDir)) {
     return { success: false, error: 'Neispravna putanja projekta' }
   }
@@ -321,6 +331,49 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
   if (cFiles.length === 0) {
     return { success: false, error: 'Nije pronađen nijedan .c fajl u projektu.' }
   }
+
+  // Separate files into those containing main() and helper modules without main()
+  const mainCFiles: string[] = []
+  const helperCFiles: string[] = []
+
+  for (const fileP of cFiles) {
+    try {
+      const content = await fs.readFile(fileP, 'utf-8')
+      if (hasMainFunction(content)) {
+        mainCFiles.push(fileP)
+      } else {
+        helperCFiles.push(fileP)
+      }
+    } catch {
+      helperCFiles.push(fileP)
+    }
+  }
+
+  // Select target main file
+  let targetMainFile: string | null = null
+
+  if (activeFilePath && typeof activeFilePath === 'string' && isPathSafe(activeFilePath) && fsSync.existsSync(activeFilePath)) {
+    const rel = path.relative(projectDir, activeFilePath)
+    const isInsideProject = !rel.startsWith('..') && !path.isAbsolute(rel)
+    if (isInsideProject) {
+      const normalizedActive = path.normalize(activeFilePath)
+      if (mainCFiles.some(f => path.normalize(f) === normalizedActive)) {
+        targetMainFile = activeFilePath
+      }
+    }
+  }
+
+  if (!targetMainFile) {
+    if (mainCFiles.length > 0) {
+      targetMainFile = mainCFiles[0]
+    }
+  }
+
+  if (!targetMainFile) {
+    return { success: false, error: 'Nije pronađen nijedan .c fajl u projektu.' }
+  }
+
+  const targetCFiles = [targetMainFile, ...helperCFiles.filter(f => path.normalize(f) !== path.normalize(targetMainFile!))]
 
   const tempDir = os.tmpdir()
   const timestamp = Date.now()
@@ -346,7 +399,7 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
       ...includeFlags,
       ...extraFlags,
       '-o', exePath,
-      ...cFiles,
+      ...targetCFiles,
     ], {
       cwd: projectDir,
       maxBuffer: 10 * 1024 * 1024,
@@ -359,6 +412,7 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
     return {
       success: true,
       exePath,
+      cwd: projectDir,
       errors: warnings,
       stdout: result.stdout || '',
       stderr,
@@ -383,6 +437,7 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string) => {
       stdout,
       stderr,
       exePath: hasError ? undefined : exePath,
+      cwd: hasError ? undefined : projectDir,
     }
   }
 })
@@ -464,6 +519,8 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string, originalFilePath
     await fs.writeFile(tempFile, code, 'utf-8')
 
     const cppcheckExe = process.platform === 'win32' ? 'cppcheck.exe' : 'cppcheck'
+    const includeFlags = originalFilePath && isPathSafe(originalFilePath) ? ['-I', path.dirname(originalFilePath)] : []
+    const cwdOption = originalFilePath && isPathSafe(originalFilePath) ? path.dirname(originalFilePath) : undefined
 
     let stdout: string
     let stderr: string
@@ -474,9 +531,11 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string, originalFilePath
         `--std=${cStandard}`,
         '--xml-version=2',
         '-q',
+        ...includeFlags,
         ...extraFlags,
         tempFile,
       ], {
+        cwd: cwdOption,
         maxBuffer: 10 * 1024 * 1024,
         timeout: 30000,
       })
@@ -567,11 +626,56 @@ ipcMain.handle('gcc:check', async (): Promise<{ detected: boolean; version?: str
 // ---- GCC compilation ----
 
 ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: string) => {
+  let isSaved = false
+  if (originalFilePath && typeof originalFilePath === 'string' && isPathSafe(originalFilePath)) {
+    try {
+      if (fsSync.existsSync(originalFilePath) && fsSync.statSync(originalFilePath).isFile()) {
+        isSaved = true
+      }
+    } catch {
+      isSaved = false
+    }
+  }
+
+  if (!isSaved) {
+    const defaultPath = originalFilePath && isPathSafe(originalFilePath) ? originalFilePath : undefined
+    const result = await dialog.showSaveDialog({
+      title: 'Sačuvajte C fajl pre kompajliranja',
+      defaultPath,
+      filters: [{ name: 'C fajlovi', extensions: ['c', 'h'] }],
+    })
+    if (result.canceled || !result.filePath || !isPathSafe(result.filePath)) {
+      return {
+        success: false,
+        error: 'Kompajliranje je otkazano jer fajl nije sačuvan.',
+        errors: [] as GccError[],
+        stdout: '',
+        stderr: '',
+      }
+    }
+    originalFilePath = result.filePath
+  }
+
+  const finalFilePath = originalFilePath!
+
+  try {
+    await fs.writeFile(finalFilePath, code, 'utf-8')
+    lastSavedContent = code
+    startWatching(finalFilePath)
+  } catch (err) {
+    return {
+      success: false,
+      error: `Greška pri čuvanju fajla: ${err instanceof Error ? err.message : String(err)}`,
+      errors: [] as GccError[],
+      stdout: '',
+      stderr: '',
+    }
+  }
+
+  const sourceDir = path.dirname(finalFilePath)
   const tempDir = os.tmpdir()
   const timestamp = Date.now()
-  const cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
   const exePath = path.join(tempDir, process.platform === 'win32' ? `gcc_${timestamp}.exe` : `gcc_${timestamp}`)
-  tempFiles.add(cFilePath)
   tempFiles.add(exePath)
 
   let settings: AppSettings
@@ -585,7 +689,7 @@ ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: st
   const extraFlags = sanitizeFlags(settings.compiler.extraFlags)
 
   const hasStdioH = /#include\s*<stdio\.h>/.test(code)
-  const targetFilePath = originalFilePath || undefined
+  const targetFilePath = finalFilePath
 
   const normalizeErrors = (rawErrors: GccError[]): GccError[] => {
     return rawErrors.map((err) => {
@@ -601,19 +705,56 @@ ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: st
     })
   }
 
+  // Collect sibling .c files in sourceDir (excluding temp files, main file, and files containing main()) to link together
+  let siblingCFiles: string[] = []
   try {
-    const injectedCode = injectUnbuffer(code)
-    await fs.writeFile(cFilePath, injectedCode, 'utf-8')
+    const dirEntries = await fs.readdir(sourceDir, { withFileTypes: true })
+    const finalBasename = path.basename(finalFilePath).toLowerCase()
+    for (const entry of dirEntries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.c')) {
+        const entryNameLower = entry.name.toLowerCase()
+        if (entryNameLower !== finalBasename && !entryNameLower.startsWith('.temp_gcc')) {
+          const fullP = path.join(sourceDir, entry.name)
+          try {
+            const content = await fs.readFile(fullP, 'utf-8')
+            if (!hasMainFunction(content)) {
+              siblingCFiles.push(fullP)
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+  } catch {
+    siblingCFiles = []
+  }
 
+  // Create temporary .c file in sourceDir (or fallback to tempDir if sourceDir is read-only)
+  let cFilePath = path.join(sourceDir, `.temp_gcc_${timestamp}.c`)
+  const injectedCode = injectUnbuffer(code)
+  try {
+    await fs.writeFile(cFilePath, injectedCode, 'utf-8')
+    tempFiles.add(cFilePath)
+  } catch {
+    cFilePath = path.join(tempDir, `gcc_${timestamp}.c`)
+    await fs.writeFile(cFilePath, injectedCode, 'utf-8')
+    tempFiles.add(cFilePath)
+  }
+
+  try {
     const gccExe = process.platform === 'win32' ? 'gcc.exe' : 'gcc'
 
     try {
       const result = await execFileAsync(gccExe, [
         `-std=${cStandard}`, '-Wall', '-Wextra',
+        '-I', sourceDir,
         ...extraFlags,
         '-o', exePath,
         cFilePath,
+        ...siblingCFiles,
       ], {
+        cwd: sourceDir,
         maxBuffer: 10 * 1024 * 1024,
         timeout: 30000,
       })
@@ -624,6 +765,8 @@ ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: st
       return {
         success: true,
         exePath,
+        cwd: sourceDir,
+        savedFilePath: finalFilePath,
         errors: warnings,
         stdout: result.stdout || '',
         stderr,
@@ -666,6 +809,8 @@ ipcMain.handle('gcc:compile', async (_event, code: string, originalFilePath?: st
         stdout,
         stderr,
         exePath: hasError ? undefined : exePath,
+        cwd: hasError ? undefined : sourceDir,
+        savedFilePath: finalFilePath,
       }
     }
   } catch (err) {
@@ -696,7 +841,7 @@ async function cleanupExe(exePath: string | null) {
   }
 }
 
-ipcMain.handle('program:run', async (_event, exePath: string) => {
+ipcMain.handle('program:run', async (_event, exePath: string, workingDirOrFilePath?: string) => {
   if (runningProcess) {
     return { success: false, error: 'Program je već pokrenut' }
   }
@@ -707,10 +852,24 @@ ipcMain.handle('program:run', async (_event, exePath: string) => {
     return { success: false, error: 'Izvršni fajl nije pronađen' }
   }
 
+  let targetCwd = os.tmpdir()
+  if (workingDirOrFilePath && typeof workingDirOrFilePath === 'string' && isPathSafe(workingDirOrFilePath)) {
+    try {
+      const stat = await fs.stat(workingDirOrFilePath)
+      if (stat.isDirectory()) {
+        targetCwd = workingDirOrFilePath
+      } else {
+        targetCwd = path.dirname(workingDirOrFilePath)
+      }
+    } catch {
+      targetCwd = path.extname(workingDirOrFilePath) ? path.dirname(workingDirOrFilePath) : workingDirOrFilePath
+    }
+  }
+
   runningExePath = exePath
   runningProcess = spawn(exePath, [], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: os.tmpdir(),
+    cwd: targetCwd,
   })
 
   runningProcess.on('error', (err) => {

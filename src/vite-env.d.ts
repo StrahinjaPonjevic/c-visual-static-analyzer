@@ -11,7 +11,7 @@ interface Window {
         createProjectFolder: (targetPath: string) => Promise<{ success: boolean; error?: string }>
         renameProjectItem: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
         deleteProjectItem: (targetPath: string) => Promise<{ success: boolean; error?: string }>
-        compileProject: (projectDir: string) => Promise<import('./types').GccResult>
+        compileProject: (projectDir: string, activeFilePath?: string) => Promise<import('./types').GccResult>
         analyzeProject: (projectDir: string) => Promise<{ issues: import('./types').CppcheckIssue[]; success: boolean; error?: string }>
         onMenuNew: (callback: () => void) => () => void
         onMenuOpen: (callback: () => void) => () => void
@@ -43,7 +43,7 @@ interface Window {
         checkGcc: () => Promise<{ detected: boolean; version?: string }>
         checkCppcheck: () => Promise<{ detected: boolean; version?: string }>
         compileCode: (code: string, originalFilePath?: string) => Promise<import('./types').GccResult>
-        runProgram: (exePath: string) => Promise<{ success: boolean; error?: string }>
+        runProgram: (exePath: string, cwd?: string) => Promise<{ success: boolean; error?: string }>
         sendStdin: (data: string) => Promise<{ success: boolean; error?: string }>
         killProgram: () => Promise<{ success: boolean; error?: string }>
         onProgramStdout: (callback: (data: string) => void) => () => void
