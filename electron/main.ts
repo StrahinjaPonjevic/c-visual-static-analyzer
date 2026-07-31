@@ -462,6 +462,8 @@ ipcMain.handle('cppcheck:analyze-project', async (_event, projectDir: string): P
       const result = await execFileAsync(cppcheckExe, [
         '--enable=all',
         '--inline-suppr',
+        '--suppress=unusedFunction:*.h',
+        '--suppress=unusedFunction:*.hpp',
         `--std=${cStandard}`,
         '--xml-version=2',
         '-q',
@@ -528,6 +530,7 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string, originalFilePath
       const result = await execFileAsync(cppcheckExe, [
         '--enable=all',
         '--inline-suppr',
+        '--suppress=unusedFunction',
         `--std=${cStandard}`,
         '--xml-version=2',
         '-q',
