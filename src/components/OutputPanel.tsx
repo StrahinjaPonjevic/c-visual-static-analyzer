@@ -62,22 +62,21 @@ export function OutputPanel({
         </button>
       </div>
       <ScrollArea className="flex-1">
-        <div className="p-3 font-mono text-xs leading-relaxed">
+        <div className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
           {terminalOutput.length === 0 ? (
-            <p className="text-muted-foreground italic">Kliknite "Pokreni" za kompajliranje i izvršavanje...</p>
+            <p className="text-muted-foreground italic font-sans">Kliknite "Pokreni" za kompajliranje i izvršavanje...</p>
           ) : (
             terminalOutput.map((line) => (
-              <div
+              <span
                 key={line.id}
                 className={cn(
-                  "whitespace-pre-wrap break-all",
                   line.type === "stderr" && "text-red-400",
                   line.type === "system" && "text-muted-foreground italic",
                   line.type === "stdout" && "text-foreground"
                 )}
               >
                 {line.text}
-              </div>
+              </span>
             ))
           )}
           <div ref={terminalEndRef} />

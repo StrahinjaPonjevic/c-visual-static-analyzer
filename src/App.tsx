@@ -998,11 +998,16 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
 
   const handleSendStdin = useCallback((text: string) => {
     window.api.sendStdin(text)
-    setTerminalOutput((prev) => [...prev, {
-      id: terminalIdRef.current++,
-      type: "stdout",
-      text: text,
-    }])
+    setTerminalOutput((prev) => {
+      if (prev.length === 0) return [{ id: terminalIdRef.current++, type: "stdout", text }]
+      const last = prev[prev.length - 1]
+      if (last.type === "stdout") {
+        const updated = [...prev]
+        updated[updated.length - 1] = { ...last, text: last.text + text }
+        return updated
+      }
+      return [...prev, { id: terminalIdRef.current++, type: "stdout", text }]
+    })
   }, [])
 
   // Listen for program output from main process
