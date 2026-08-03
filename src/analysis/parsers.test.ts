@@ -203,6 +203,16 @@ int main() {
     expect(metrics.pointers).toBe(1)
     expect(metrics.includes).toBe(2)
     expect(metrics.comments).toBe(1)
+    expect(metrics.cyclomaticComplexity).toBe(3) // 1 + for + if
+    expect(metrics.memoryLeakRisk).toBe(false)
+  })
+
+  it('detects memory leak risk when malloc > free', () => {
+    const code = 'int main() { char *p = malloc(10); return 0; }'
+    const metrics = computeMetrics(code)
+    expect(metrics.mallocCalls).toBe(1)
+    expect(metrics.freeCalls).toBe(0)
+    expect(metrics.memoryLeakRisk).toBe(true)
   })
 })
 

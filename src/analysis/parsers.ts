@@ -84,6 +84,8 @@ export interface CodeMetrics {
   freeCalls: number
   includes: number
   comments: number
+  cyclomaticComplexity: number
+  memoryLeakRisk: boolean
 }
 
 export function stripCommentsAndStrings(code: string): string {
@@ -162,6 +164,14 @@ export function computeMetrics(rawCode: string): CodeMetrics {
   const multiLineComments = (rawCode.match(/\/\*[\s\S]*?\*\//g) || []).length
   const comments = singleLineComments + multiLineComments
 
+  const ternaryCount = (code.match(/\?/g) || []).length
+  const caseCount = (code.match(/\bcase\s+/g) || []).length
+  const logicalAndCount = (code.match(/&&/g) || []).length
+  const logicalOrCount = (code.match(/\|\|/g) || []).length
+
+  const cyclomaticComplexity = 1 + ifCount + elseIfCount + loops + caseCount + ternaryCount + logicalAndCount + logicalOrCount
+  const memoryLeakRisk = mallocCalls > freeCalls
+
   return {
     lines: nonEmptyLines,
     totalLines,
@@ -175,6 +185,8 @@ export function computeMetrics(rawCode: string): CodeMetrics {
     freeCalls,
     includes,
     comments,
+    cyclomaticComplexity,
+    memoryLeakRisk,
   }
 }
 

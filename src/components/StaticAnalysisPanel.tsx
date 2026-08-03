@@ -15,6 +15,9 @@ import {
   ChevronDown,
   ChevronRight,
   Sparkles,
+  Activity,
+  ShieldAlert,
+  Download,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -121,8 +124,10 @@ export function StaticAnalysisPanel({
   const warningCount = combinedIssues.filter((i) => i.severity === "warning" || i.severity === "style" || i.severity === "performance" || i.severity === "portability").length
 
   const metricCards = [
-    { icon: Hash, label: "Linija koda", value: metrics.lines, sub: `Ukupno ${metrics.totalLines}` },
+    { icon: Hash, label: "Linija koda", value: metrics.lines },
     { icon: FunctionSquare, label: "Funkcija", value: metrics.functions },
+    { icon: Activity, label: "Ciklomačka složenost", value: metrics.cyclomaticComplexity },
+    { icon: ShieldAlert, label: "Rizik curenja", value: metrics.memoryLeakRisk ? "⚠️ Da" : "✅ Ne" },
     { icon: GitBranch, label: "If/Else", value: metrics.ifStatements },
     { icon: GitBranch, label: "Petlje", value: metrics.loops },
     { icon: Braces, label: "Nizovi", value: metrics.arrays },
@@ -133,16 +138,106 @@ export function StaticAnalysisPanel({
     { icon: Package, label: "#include", value: metrics.includes },
   ]
 
+  const handleExportReport = () => {
+    const reportHtml = `
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <title>Izveštaj Statičke Analize Koda - C Visual Static Analyzer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 40px; color: #0f172a; background: #f8fafc; line-height: 1.5; }
+    h1 { color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 4px; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .section { margin-top: 24px; background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
+    .card { background: #f1f5f9; padding: 12px; border-radius: 6px; }
+    .card-value { font-size: 20px; font-weight: bold; color: #0284c7; }
+    .card-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    th { background: #f1f5f9; color: #475569; }
+    .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+    .badge-error { background: #fee2e2; color: #991b1b; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-style { background: #e0f2fe; color: #075985; }
+  </style>
+</head>
+<body>
+  <h1>📊 Izveštaj Statičke Analize Koda</h1>
+  <div class="subtitle">Generisano pomoću <strong>C Visual Static Analyzer</strong> | Datum: ${new Date().toLocaleString('sr-RS')}</div>
+
+  <div class="section">
+    <h2>📈 Metrike Koda</h2>
+    <div class="grid">
+      <div class="card"><div class="card-value">${metrics.lines}</div><div class="card-label">Linije koda</div></div>
+      <div class="card"><div class="card-value">${metrics.functions}</div><div class="card-label">Funkcija</div></div>
+      <div class="card"><div class="card-value">${metrics.cyclomaticComplexity}</div><div class="card-label">Ciklomačka složenost</div></div>
+      <div class="card"><div class="card-value">${metrics.mallocCalls} / ${metrics.freeCalls}</div><div class="card-label">malloc / free</div></div>
+      <div class="card"><div class="card-value">${metrics.pointers}</div><div class="card-label">Pokazivači</div></div>
+      <div class="card"><div class="card-value">${metrics.memoryLeakRisk ? "⚠️ Da" : "✅ Ne"}</div><div class="card-label">Rizik curenja memorije</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🔍 Detektovani Problemi (${combinedIssues.length})</h2>
+    ${combinedIssues.length === 0 ? '<p style="color:#16a34a; font-weight:600; font-size: 15px;">✅ Nema detektovanih problema u kodu!</p>' : `
+    <table>
+      <thead>
+        <tr>
+          <th>Izvor</th>
+          <th>Linija</th>
+          <th>Tip</th>
+          <th>Poruka</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${combinedIssues.map(i => `
+          <tr>
+            <td><strong>${i.source.toUpperCase()}</strong></td>
+            <td>${i.line}</td>
+            <td><span class="badge badge-${i.severity || 'error'}">${i.severity}</span></td>
+            <td>${i.message}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    `}
+  </div>
+</body>
+</html>
+    `
+    const blob = new Blob([reportHtml], { type: 'text/html;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `static_analysis_report_${Date.now()}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-2">
           {/* Metrike section */}
           <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
-            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
-              {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
-              Metrike
-            </CollapsibleTrigger>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 flex-1">
+                {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+                Metrike
+              </CollapsibleTrigger>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                onClick={handleExportReport}
+                title="Izvezi HTML izveštaj analize"
+              >
+                <Download className="h-3 w-3 text-cyan-400" />
+                <span>Izvezi izveštaj</span>
+              </Button>
+            </div>
             <CollapsibleContent className="pt-2">
               <div className="grid grid-cols-2 gap-2">
                 {metricCards.map((item, i) => (
