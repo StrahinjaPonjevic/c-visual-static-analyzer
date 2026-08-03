@@ -1269,6 +1269,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                   onAiInputChange={setAiInput}
                   isAiLoading={isAiLoading}
                   aiError={aiError}
+                  modelName={settings.llm.model}
                   onAiSend={handleAiSend}
                   onAiStop={handleAiStop}
                   onAiClear={handleClearAiChat}

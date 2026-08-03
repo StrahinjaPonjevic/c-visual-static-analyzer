@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useState } from "react"
 import { Send, Bot, User, Loader2, AlertCircle, StopCircle, ChevronRight, Brain, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { MarkdownRenderer } from "@/components/MarkdownRenderer"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import type { Message } from "@/App"
 import { useTranslation } from "@/i18n/LanguageContext"
+import { cn } from "@/lib/utils"
 
 interface AIPanelProps {
   code: string
@@ -16,16 +17,36 @@ interface AIPanelProps {
   onInputChange: (value: string) => void
   isLoading: boolean
   error: string | null
+  modelName?: string
   onSend: () => void
   onStop: () => void
   onClear: () => void
   onApplyCode?: (code: string) => void
 }
 
-export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop, onClear, onApplyCode }: AIPanelProps) {
+export function AIPanel({ messages, input, onInputChange, isLoading, error, modelName, onSend, onStop, onClear, onApplyCode }: AIPanelProps) {
   const { t } = useTranslation()
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLElement | null>(null)
+  const [isOnline, setIsOnline] = useState<boolean | undefined>(undefined)
+
+  useEffect(() => {
+    let isMounted = true
+    const checkService = () => {
+      window.api.checkLlm().then((res) => {
+        if (isMounted) setIsOnline(res.connected)
+      }).catch(() => {
+        if (isMounted) setIsOnline(false)
+      })
+    }
+
+    checkService()
+    const interval = setInterval(checkService, 12000)
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [modelName, isLoading])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -49,10 +70,38 @@ export function AIPanel({ messages, input, onInputChange, isLoading, error, onSe
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex h-7 items-center justify-between bg-background border-b px-3 shrink-0">
-        <div className="flex items-center gap-1.5">
-          <Bot className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{t("ai.title")}</span>
+        <div className="flex items-center gap-2 truncate">
+          <Bot className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs text-muted-foreground font-medium hidden sm:inline">{t("ai.title")}</span>
+
+          {/* Model & Online status indicator */}
+          <div
+            className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5 border text-[10px] select-none"
+            title={
+              isOnline === undefined
+                ? t("common.checking")
+                : isOnline
+                  ? `${t("ai.statusConnected")} (${modelName || "Ollama"})`
+                  : t("ai.statusDisconnected")
+            }
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full transition-colors shrink-0",
+                isOnline === undefined && "bg-amber-400 animate-pulse",
+                isOnline === true && "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]",
+                isOnline === false && "bg-red-400"
+              )}
+            />
+            <span className="font-mono text-muted-foreground truncate max-w-[110px]">
+              {modelName || "Ollama"}
+            </span>
+            <span className="text-[9px] text-muted-foreground/70 hidden sm:inline">
+              {isOnline === undefined ? t("common.checking") : isOnline ? t("ai.online") : t("ai.offline")}
+            </span>
+          </div>
         </div>
+
         <button
           className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30"
           onClick={onClear}

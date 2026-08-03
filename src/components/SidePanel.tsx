@@ -16,6 +16,7 @@ interface SidePanelProps {
   onAiInputChange: (value: string) => void
   isAiLoading: boolean
   aiError: string | null
+  modelName?: string
   onAiSend: () => void
   onAiStop: () => void
   onAiClear: () => void
@@ -36,6 +37,7 @@ export function SidePanel({
   onAiInputChange,
   isAiLoading,
   aiError,
+  modelName,
   onAiSend,
   onAiStop,
   onAiClear,
@@ -53,6 +55,7 @@ export function SidePanel({
           onInputChange={onAiInputChange}
           isLoading={isAiLoading}
           error={aiError}
+          modelName={modelName}
           onSend={onAiSend}
           onStop={onAiStop}
           onClear={onAiClear}

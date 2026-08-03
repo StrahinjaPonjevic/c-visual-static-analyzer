@@ -80,6 +80,11 @@ export const translations = {
       thinking: "Razmišljam...",
       send: "Pošalji",
       stop: "Zaustavi",
+      online: "Povezano",
+      offline: "Nije povezano",
+      statusConnected: "Lokalni Ollama servis je povezan i spreman",
+      statusDisconnected: "Lokalni Ollama servis nije dostupan (pokrenite ollama serve)",
+      model: "Model",
     },
     explorer: {
       project: "Projekat",
@@ -251,6 +256,11 @@ export const translations = {
       thinking: "Thinking...",
       send: "Send",
       stop: "Stop",
+      online: "Connected",
+      offline: "Disconnected",
+      statusConnected: "Local Ollama service is connected and ready",
+      statusDisconnected: "Local Ollama service is unavailable (start ollama serve)",
+      model: "Model",
     },
     explorer: {
       project: "Project",
