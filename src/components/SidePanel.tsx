@@ -18,6 +18,7 @@ interface SidePanelProps {
   aiError: string | null
   onAiSend: () => void
   onAiStop: () => void
+  onAiClear: () => void
   onSelectFile?: (filePath: string, line?: number) => void
   onExplainWithAi?: (item: ExplainWithAiItem) => void
 }
@@ -36,6 +37,7 @@ export function SidePanel({
   aiError,
   onAiSend,
   onAiStop,
+  onAiClear,
   onSelectFile,
   onExplainWithAi,
 }: SidePanelProps) {
@@ -51,6 +53,7 @@ export function SidePanel({
           error={aiError}
           onSend={onAiSend}
           onStop={onAiStop}
+          onClear={onAiClear}
         />
       </div>
       <div className={cn("flex h-full flex-col overflow-hidden", activeTab !== "analysis" && "hidden")}>

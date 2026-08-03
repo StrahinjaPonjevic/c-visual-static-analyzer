@@ -241,13 +241,13 @@ export function App() {
   }, [code, runCppcheckSingle, runCppcheckProject])
 
   // ---- AI Chat state ----
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "assistant",
-      content: "Zdravo! Ja sam vaš AI asistent za programiranje. Mogu vam pomoći sa objašnjavanjem koda, pronalaženjem grešaka i učenjem C programiranja. Kako mogu da pomognem?",
-    },
-  ])
+  const INITIAL_AI_GREETING: Message = useMemo(() => ({
+    id: 1,
+    role: "assistant",
+    content: "Zdravo! Ja sam vaš AI asistent za programiranje. Mogu vam pomoći sa objašnjavanjem koda, pronalaženjem grešaka i učenjem C programiranja. Kako mogu da pomognem?",
+  }), [])
+
+  const [messages, setMessages] = useState<Message[]>([INITIAL_AI_GREETING])
   const [aiInput, setAiInput] = useState("")
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
@@ -258,6 +258,7 @@ export function App() {
 
   useEffect(() => {
     const cleanChunk = window.api.onLlmChunk((data) => {
+      if (!aiStreamingRef.current) return
       if (data.role === "thinking") {
         aiThinkingChunksRef.current += data.content
       } else {
@@ -280,6 +281,7 @@ export function App() {
     })
 
     const cleanDone = window.api.onLlmDone(() => {
+      if (!aiStreamingRef.current) return
       const lastMsgId = aiMessageIdRef.current - 1
       const finalContent = aiContentChunksRef.current
       const finalThinking = aiThinkingChunksRef.current
@@ -300,6 +302,7 @@ export function App() {
     })
 
     const cleanError = window.api.onLlmError((err) => {
+      if (!aiStreamingRef.current) return
       setAiError(err)
       setMessages((prev) => {
         const last = prev[prev.length - 1]
@@ -413,6 +416,19 @@ export function App() {
     aiContentChunksRef.current = ""
     setIsAiLoading(false)
   }, [])
+
+  const handleClearAiChat = useCallback(() => {
+    if (aiStreamingRef.current) {
+      window.api.stopGeneration()
+      aiStreamingRef.current = false
+    }
+    aiThinkingChunksRef.current = ""
+    aiContentChunksRef.current = ""
+    setIsAiLoading(false)
+    setAiError(null)
+    setAiInput("")
+    setMessages([INITIAL_AI_GREETING])
+  }, [INITIAL_AI_GREETING])
 
   const handleExplainWithAi = useCallback((item: ExplainWithAiItem) => {
     setActiveSideTab('ai')
@@ -1191,6 +1207,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                   aiError={aiError}
                   onAiSend={handleAiSend}
                   onAiStop={handleAiStop}
+                  onAiClear={handleClearAiChat}
                   onSelectFile={handleSelectFile}
                   onExplainWithAi={handleExplainWithAi}
                 />

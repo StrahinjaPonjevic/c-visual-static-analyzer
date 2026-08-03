@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react"
-import { Send, Bot, User, Loader2, AlertCircle, StopCircle, ChevronRight, Brain } from "lucide-react"
+import { Send, Bot, User, Loader2, AlertCircle, StopCircle, ChevronRight, Brain, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -17,9 +17,10 @@ interface AIPanelProps {
   error: string | null
   onSend: () => void
   onStop: () => void
+  onClear: () => void
 }
 
-export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop }: AIPanelProps) {
+export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop, onClear }: AIPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLElement | null>(null)
 
@@ -44,6 +45,21 @@ export function AIPanel({ messages, input, onInputChange, isLoading, error, onSe
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-7 items-center justify-between bg-background border-b px-3 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs text-muted-foreground">AI Asistent</span>
+        </div>
+        <button
+          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30"
+          onClick={onClear}
+          disabled={(messages.length <= 1 && !error) || isLoading}
+          title="Očisti ćaskanje"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+
       <ScrollArea ref={scrollRef} className="flex-1 p-4">
         <div className="space-y-4 min-w-0">
           {messages.map((message) => (

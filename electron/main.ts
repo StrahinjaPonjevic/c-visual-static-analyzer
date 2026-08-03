@@ -1095,6 +1095,8 @@ ipcMain.on('llm:chat', async (_event, messages: LlmMessage[]) => {
       try { reader.cancel() } catch { /* ignore */ }
     }
 
+    if (abort.signal.aborted) return
+
     try {
       if (win && !win.isDestroyed()) {
         win.webContents.send('llm:done')
