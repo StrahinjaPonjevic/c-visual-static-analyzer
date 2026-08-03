@@ -10,6 +10,8 @@ import {
   Square,
   Loader2,
   X,
+  Undo2,
+  Redo2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -26,6 +28,8 @@ interface ToolbarProps {
   onOpenFolder: () => void
   onCloseProject?: () => void
   onSave: () => void
+  onUndo?: () => void
+  onRedo?: () => void
   showSidePanel: boolean
   activeSideTab: "ai" | "analysis"
   onToggleAI: () => void
@@ -47,6 +51,8 @@ export function Toolbar({
   onOpenFolder,
   onCloseProject,
   onSave,
+  onUndo,
+  onRedo,
   showSidePanel,
   activeSideTab,
   onToggleAI,
@@ -155,6 +161,34 @@ export function Toolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Snimi (Ctrl+S)</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150"
+              onClick={onUndo}
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Poništi (Ctrl+Z)</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg hover:bg-muted/80 hover:text-foreground transition-all duration-150"
+              onClick={onRedo}
+            >
+              <Redo2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Ponovi (Ctrl+Y)</TooltipContent>
         </Tooltip>
       </div>
 

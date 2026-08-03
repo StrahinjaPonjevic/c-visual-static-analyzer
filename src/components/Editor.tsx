@@ -10,6 +10,7 @@ type Props = {
     onCursorChange?: (line: number, column: number) => void
     onExplainWithAi?: (line: number, lineContent: string) => void
     onDropFilePath?: (filePath: string) => void
+    onMount?: (editor: MonacoEditorInstance) => void
     markers?: CodeMarker[]
     fontSize?: number
     tabSize?: number
@@ -24,6 +25,7 @@ export default function Editor({
     onCursorChange,
     onExplainWithAi,
     onDropFilePath,
+    onMount,
     markers,
     fontSize = 14,
     tabSize = 2,
@@ -38,6 +40,7 @@ export default function Editor({
 
     const handleEditorMount: OnMount = (monacoEditor) => {
         setEditorInstance(monacoEditor)
+        onMount?.(monacoEditor)
 
         monacoEditor.addAction({
             id: 'explain-line-with-ai',

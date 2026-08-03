@@ -18,9 +18,10 @@ interface AIPanelProps {
   onSend: () => void
   onStop: () => void
   onClear: () => void
+  onApplyCode?: (code: string) => void
 }
 
-export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop, onClear }: AIPanelProps) {
+export function AIPanel({ messages, input, onInputChange, isLoading, error, onSend, onStop, onClear, onApplyCode }: AIPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLElement | null>(null)
 
@@ -99,7 +100,7 @@ export function AIPanel({ messages, input, onInputChange, isLoading, error, onSe
                     )}
                     {message.content ? (
                       <>
-                        <MarkdownRenderer content={message.content} />
+                        <MarkdownRenderer content={message.content} onApplyCode={onApplyCode} />
                         {message.isStreaming && (
                           <span className="inline-flex items-center gap-0.5 ml-1 align-baseline">
                             <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Toaster, toast } from "sonner"
+import type { OnMount } from "@monaco-editor/react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -86,6 +87,7 @@ export function App() {
   const [unsavedAction, setUnsavedAction] = useState<{ resolve: (action: 'save' | 'discard' | 'cancel') => void } | null>(null)
   const [externalChangeData, setExternalChangeData] = useState<{ filePath: string; content: string; fileName: string } | null>(null)
   const [editorKey, setEditorKey] = useState(0)
+  const editorInstanceRef = useRef<Parameters<OnMount>[0] | null>(null)
 
   const dirtyFiles = useMemo(() => {
     const dirty = new Set<string>()
@@ -562,6 +564,50 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       }))
     }
   }, [])
+
+  const handleUndo = useCallback(() => {
+    if (editorInstanceRef.current) {
+      editorInstanceRef.current.trigger('toolbar', 'undo', null)
+    }
+  }, [])
+
+  const handleRedo = useCallback(() => {
+    if (editorInstanceRef.current) {
+      editorInstanceRef.current.trigger('toolbar', 'redo', null)
+    }
+  }, [])
+
+  const handleApplyAiCode = useCallback((newCode: string) => {
+    const editor = editorInstanceRef.current
+    if (editor) {
+      const model = editor.getModel()
+      if (model) {
+        editor.executeEdits('ai-apply', [{
+          range: model.getFullModelRange(),
+          text: newCode,
+          forceMoveMarkers: true,
+        }])
+        editor.pushUndoStop()
+        editor.focus()
+        handleCodeChange(editor.getValue())
+        toast.success("Predloženi kod je primenjen u editoru!", {
+          action: {
+            label: "Vrati nazad (Ctrl+Z)",
+            onClick: () => handleUndo(),
+          },
+        })
+        return
+      }
+    }
+    handleCodeChange(newCode)
+    setEditorKey((k) => k + 1)
+    toast.success("Predloženi kod je uspešno primenjen u editoru!", {
+      action: {
+        label: "Vrati nazad (Ctrl+Z)",
+        onClick: () => handleUndo(),
+      },
+    })
+  }, [handleCodeChange, handleUndo])
 
   const handleSelectFile = useCallback(async (filePath: string) => {
     if (!openFilePaths.includes(filePath)) {
@@ -1114,6 +1160,8 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
           onOpenFolder={handleOpenFolder}
           onCloseProject={handleCloseProject}
           onSave={handleSave}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
           showSidePanel={showSidePanel}
           activeSideTab={activeSideTab}
           onToggleAI={handleToggleAI}
@@ -1174,6 +1222,9 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                       key={`${activeFilePath}_${editorKey}`}
                       value={code}
                       onChange={handleCodeChange}
+                      onMount={(ed) => {
+                        editorInstanceRef.current = ed
+                      }}
                       onCursorChange={(line, column) => {
                         setCursorLine(line)
                         setCursorColumn(column)
@@ -1228,6 +1279,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                   onAiClear={handleClearAiChat}
                   onSelectFile={handleSelectFile}
                   onExplainWithAi={handleExplainWithAi}
+                  onApplyCode={handleApplyAiCode}
                 />
               </ResizablePanel>
             </>

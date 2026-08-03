@@ -21,6 +21,7 @@ interface SidePanelProps {
   onAiClear: () => void
   onSelectFile?: (filePath: string, line?: number) => void
   onExplainWithAi?: (item: ExplainWithAiItem) => void
+  onApplyCode?: (code: string) => void
 }
 
 export function SidePanel({
@@ -40,6 +41,7 @@ export function SidePanel({
   onAiClear,
   onSelectFile,
   onExplainWithAi,
+  onApplyCode,
 }: SidePanelProps) {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-sidebar">
@@ -54,6 +56,7 @@ export function SidePanel({
           onSend={onAiSend}
           onStop={onAiStop}
           onClear={onAiClear}
+          onApplyCode={onApplyCode}
         />
       </div>
       <div className={cn("flex h-full flex-col overflow-hidden", activeTab !== "analysis" && "hidden")}>
