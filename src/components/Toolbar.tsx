@@ -92,7 +92,7 @@ export function Toolbar({
               <FilePlus className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Novi fajl</TooltipContent>
+          <TooltipContent>Novi fajl (Ctrl+N)</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -106,7 +106,7 @@ export function Toolbar({
               <FolderOpen className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Otvori fajl</TooltipContent>
+          <TooltipContent>Otvori fajl (Ctrl+O)</TooltipContent>
         </Tooltip>
 
         {mode === 'project' ? (

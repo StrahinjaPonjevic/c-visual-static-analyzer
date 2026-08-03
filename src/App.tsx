@@ -1178,6 +1178,14 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
                         setCursorLine(line)
                         setCursorColumn(column)
                       }}
+                      onExplainWithAi={(line, lineContent) => {
+                        handleExplainWithAi({
+                          line,
+                          message: `Linija ${line}: \`${lineContent.trim()}\``,
+                          source: 'gcc',
+                        })
+                      }}
+                      onDropFilePath={(filePath) => handleSelectFile(filePath)}
                       markers={activeMarkers}
                       fontSize={settings.editor.fontSize}
                       tabSize={settings.editor.tabSize}
