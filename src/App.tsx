@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { Toaster, toast } from "sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -137,6 +138,9 @@ export function App() {
     const result = await window.api.saveSettings(newSettings)
     if (!result.success) {
       console.error("Failed to save settings:", result.error)
+      toast.error(result.error || "Greška pri čuvanju podešavanja")
+    } else {
+      toast.success("Podešavanja su uspešno sačuvana")
     }
   }, [])
 
@@ -629,8 +633,10 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         if (modeRef.current === 'project' && projectPathRef.current) {
           runCppcheckProject(projectPathRef.current)
         }
+        toast.success("Fajl je uspešno sačuvan")
         return targetPath
       }
+      toast.error(result.error || "Greška pri čuvanju fajla")
       return null
     } else {
       const defaultDir = projectPathRef.current || undefined
@@ -654,6 +660,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
           handleRefreshTree()
           runCppcheckProject(projectPathRef.current)
         }
+        toast.success("Fajl je uspešno sačuvan")
         return newPath
       }
       return null
@@ -960,10 +967,13 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       }
 
       if (!result.success) {
+        toast.error("Kompajliranje neuspešno - postoje greške u kodu")
         compilingRef.current = false
         setIsCompiling(false)
         return
       }
+
+      toast.success("Kompajliranje uspešno!")
 
       // Kompajliranje uspešno — pokreni program
       setTerminalOutput((prev) => [...prev, {
@@ -1272,6 +1282,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
           settings={settings}
           onSave={handleSaveSettings}
         />
+        <Toaster position="bottom-right" theme="dark" richColors />
       </div>
     </TooltipProvider>
   )

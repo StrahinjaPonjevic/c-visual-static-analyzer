@@ -33,8 +33,6 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         return () => disposable.dispose()
     }, [editorInstance, onCursorChange])
 
-    const markersKey = useMemo(() => JSON.stringify(markers ?? []), [markers])
-
     useEffect(() => {
         if (!editorInstance) return
 
@@ -53,7 +51,7 @@ export default function Editor({ value, onChange, onCursorChange, markers, fontS
         }))
 
         decorationIdsRef.current = editorInstance.deltaDecorations(decorationIdsRef.current, newDecorations)
-    }, [editorInstance, markersKey])
+    }, [editorInstance, markers])
 
     const handleChange = (v: string | undefined) => {
         onChange(v ?? '')
