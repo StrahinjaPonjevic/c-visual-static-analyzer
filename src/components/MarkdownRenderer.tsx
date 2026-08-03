@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm"
 import { type Components } from "react-markdown"
 import { ArrowLeftRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface MarkdownRendererProps {
   content: string
@@ -10,6 +11,8 @@ interface MarkdownRendererProps {
 }
 
 export function MarkdownRenderer({ content, onApplyCode }: MarkdownRendererProps) {
+  const { t } = useTranslation()
+
   const components: Components = {
     code({ className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || "")
@@ -31,10 +34,10 @@ export function MarkdownRenderer({ content, onApplyCode }: MarkdownRendererProps
                   variant="secondary"
                   className="h-5 px-1.5 text-[10px] gap-1 bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30"
                   onClick={() => onApplyCode(codeText)}
-                  title="Primeni ovaj kod u editoru"
+                  title={t("editor.applyCodeTitle")}
                 >
                   <ArrowLeftRight className="h-3 w-3" />
-                  <span>Primeni u editoru</span>
+                  <span>{t("editor.applyCode")}</span>
                 </Button>
               )}
             </div>

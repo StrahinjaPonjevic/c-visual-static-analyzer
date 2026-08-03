@@ -1,4 +1,5 @@
 import { FileCode, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface StatusBarProps {
   filePath: string | null
@@ -23,6 +24,7 @@ export function StatusBar({
   cppcheckVersion,
   onOpenDependencyDialog,
 }: StatusBarProps) {
+  const { t } = useTranslation()
   const fileName = filePath ? filePath.split(/[/\\]/).pop() : null
 
   return (
@@ -31,12 +33,12 @@ export function StatusBar({
         {gccDetected === undefined ? (
           <div className="flex items-center gap-1.5">
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-            <span>Proveravam GCC...</span>
+            <span>GCC ({t("common.checking")})</span>
           </div>
         ) : gccDetected ? (
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors"
-            title={`${gccVersion ?? ''} (Kliknite za detalje o zavisnostima)`}
+            title={`${gccVersion ?? ''}`}
             onClick={onOpenDependencyDialog}
           >
             <CheckCircle className="h-3 w-3 text-emerald-400" />
@@ -45,22 +47,21 @@ export function StatusBar({
         ) : (
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-red-300 font-medium transition-colors"
-            title="GCC nije instaliran. Kliknite za instrukcije za instalaciju."
             onClick={onOpenDependencyDialog}
           >
             <XCircle className="h-3 w-3 text-red-400" />
-            <span className="text-red-400">GCC nije instaliran</span>
+            <span className="text-red-400">GCC ({t("dialogs.dependency.notInstalled")})</span>
           </div>
         )}
         {cppcheckDetected === undefined ? (
           <div className="flex items-center gap-1.5">
             <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-            <span>Proveravam Cppcheck...</span>
+            <span>Cppcheck ({t("common.checking")})</span>
           </div>
         ) : cppcheckDetected ? (
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors"
-            title={`${cppcheckVersion ?? ''} (Kliknite za detalje o zavisnostima)`}
+            title={`${cppcheckVersion ?? ''}`}
             onClick={onOpenDependencyDialog}
           >
             <CheckCircle className="h-3 w-3 text-emerald-400" />
@@ -69,11 +70,10 @@ export function StatusBar({
         ) : (
           <div
             className="flex items-center gap-1.5 cursor-pointer hover:text-red-300 font-medium transition-colors"
-            title="Cppcheck nije instaliran. Kliknite za instrukcije za instalaciju."
             onClick={onOpenDependencyDialog}
           >
             <XCircle className="h-3 w-3 text-red-400" />
-            <span className="text-red-400">Cppcheck nije instaliran</span>
+            <span className="text-red-400">Cppcheck ({t("dialogs.dependency.notInstalled")})</span>
           </div>
         )}
         {fileName && (
@@ -85,7 +85,7 @@ export function StatusBar({
       </div>
 
       <div className="flex items-center gap-4">
-        <span>Ln {line}, Col {column}</span>
+        <span>{t("statusBar.line")} {line}, {t("statusBar.col")} {column}</span>
         <span>{language}</span>
         <span>UTF-8</span>
       </div>

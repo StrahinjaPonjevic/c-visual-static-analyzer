@@ -16,6 +16,7 @@ export async function loadSettings(): Promise<AppSettings> {
     const raw = await fs.readFile(filePath, 'utf-8')
     const saved = JSON.parse(raw) as Partial<AppSettings>
     return {
+      general: { ...DEFAULTS.general, ...saved.general },
       llm: { ...DEFAULTS.llm, ...saved.llm },
       compiler: { ...DEFAULTS.compiler, ...saved.compiler },
       cppcheck: { ...DEFAULTS.cppcheck, ...saved.cppcheck },

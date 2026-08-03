@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import type { FileNode } from "@/types/project"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface FileExplorerProps {
   projectName: string | null
@@ -51,6 +52,7 @@ export function FileExplorer({
   onDeleteItem,
   onCloseProject,
 }: FileExplorerProps) {
+  const { t } = useTranslation()
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({})
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null)
   const [targetDir, setTargetDir] = useState<string | null>(null)
@@ -157,7 +159,7 @@ export function FileExplorer({
                     e.stopPropagation()
                     handleStartCreate(node.path, 'file')
                   }}
-                  title="Novi fajl u ovom folderu"
+                  title={t("explorer.newFile")}
                 >
                   <FilePlus className="h-3 w-3" />
                 </Button>
@@ -169,25 +171,48 @@ export function FileExplorer({
                     e.stopPropagation()
                     handleStartCreate(node.path, 'folder')
                   }}
-                  title="Novi podfolder"
+                  title={t("explorer.newFolder")}
                 >
                   <FolderPlus className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleStartRename(node)
+                  }}
+                  title={t("common.rename")}
+                >
+                  <Edit2 className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteItem(node.path)
+                  }}
+                  title={t("common.delete")}
+                >
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
             </div>
 
             {isExpanded && (
-              <div className="pl-2 border-l border-border/30 ml-2.5 my-0.5">
+              <div className="pl-2 border-l border-border/40 ml-3 my-0.5 space-y-0.5">
                 {creatingType && targetDir === node.path && (
-                  <div className="flex items-center gap-1 px-2 py-1">
+                  <div className="flex items-center gap-1.5 px-2 py-1">
                     {creatingType === 'file' ? (
-                      <File className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                      <File className="h-3.5 w-3.5 text-muted-foreground" />
                     ) : (
-                      <Folder className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <Folder className="h-3.5 w-3.5 text-amber-400" />
                     )}
                     <Input
                       type="text"
-                      placeholder={creatingType === 'file' ? 'Naziv.c...' : 'Naziv foldera...'}
                       value={inputName}
                       onChange={(e) => setInputName(e.target.value)}
                       onKeyDown={(e) => {
@@ -196,7 +221,8 @@ export function FileExplorer({
                       }}
                       onBlur={handleConfirmCreate}
                       autoFocus
-                      className="h-6 w-full text-xs"
+                      placeholder={creatingType === 'file' ? "naziv.c" : "naziv_foldera"}
+                      className="h-6 w-32 px-1 text-xs"
                     />
                   </div>
                 )}
@@ -208,45 +234,42 @@ export function FileExplorer({
       }
 
       return (
-        <div
-          key={node.path}
-          className={cn(
-            "group flex h-7 items-center justify-between px-2 text-xs cursor-pointer rounded-sm transition-colors select-none",
-            isActive
-              ? "bg-primary/15 text-primary font-medium"
-              : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-            level > 0 && "ml-2"
-          )}
-          onClick={() => onSelectFile(node.path)}
-        >
-          <div className="flex items-center gap-1.5 truncate">
-            {isC ? (
-              <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-            ) : isHeader ? (
-              <FileText className="h-3.5 w-3.5 shrink-0 text-purple-400" />
-            ) : (
-              <File className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <div key={node.path} className="select-none">
+          <div
+            className={cn(
+              "group flex h-7 items-center justify-between px-2 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground cursor-pointer rounded-sm transition-colors",
+              isActive && "bg-primary/15 text-primary font-medium hover:bg-primary/20",
+              level > 0 && "ml-2"
             )}
-            {renamingPath === node.path ? (
-              <Input
-                type="text"
-                value={renameInput}
-                onChange={(e) => setRenameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleConfirmRename(node.path)
-                  if (e.key === 'Escape') setRenamingPath(null)
-                }}
-                onBlur={() => handleConfirmRename(node.path)}
-                autoFocus
-                className="h-6 w-28 px-1 text-xs"
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <span className="truncate">{node.name}</span>
-            )}
-          </div>
+            onClick={() => onSelectFile(node.path)}
+          >
+            <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+              {isC ? (
+                <FileCode className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+              ) : isHeader ? (
+                <FileCode className="h-3.5 w-3.5 shrink-0 text-purple-400" />
+              ) : (
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              )}
+              {renamingPath === node.path ? (
+                <Input
+                  type="text"
+                  value={renameInput}
+                  onChange={(e) => setRenameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmRename(node.path)
+                    if (e.key === 'Escape') setRenamingPath(null)
+                  }}
+                  onBlur={() => handleConfirmRename(node.path)}
+                  autoFocus
+                  className="h-6 w-28 px-1 text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className="truncate">{node.name}</span>
+              )}
+            </div>
 
-          <div className="flex items-center gap-1">
             {errorData && errorData.errors > 0 && (
               <Badge variant="destructive" className="h-4 px-1 text-[10px] font-bold min-w-[16px] justify-center">
                 {errorData.errors}
@@ -267,7 +290,7 @@ export function FileExplorer({
                   e.stopPropagation()
                   handleStartRename(node)
                 }}
-                title="Preimenuj"
+                title={t("common.rename")}
               >
                 <Edit2 className="h-3 w-3" />
               </Button>
@@ -279,7 +302,7 @@ export function FileExplorer({
                   e.stopPropagation()
                   onDeleteItem(node.path)
                 }}
-                title="Obriši"
+                title={t("common.delete")}
               >
                 <Trash2 className="h-3 w-3" />
               </Button>
@@ -295,7 +318,7 @@ export function FileExplorer({
       {/* Header */}
       <div className="flex items-center justify-between h-9 px-3 border-b bg-secondary/50">
         <span className="text-xs font-semibold text-foreground truncate uppercase tracking-wider">
-          {projectName || "File Explorer"}
+          {projectName || t("explorer.project")}
         </span>
         {projectPath && (
           <div className="flex items-center gap-0.5">
@@ -310,7 +333,7 @@ export function FileExplorer({
                   <FilePlus className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Novi fajl u korenskom folderu</TooltipContent>
+              <TooltipContent>{t("explorer.newFile")}</TooltipContent>
             </Tooltip>
 
             <Tooltip>
@@ -324,7 +347,7 @@ export function FileExplorer({
                   <FolderPlus className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Novi folder u korenskom folderu</TooltipContent>
+              <TooltipContent>{t("explorer.newFolder")}</TooltipContent>
             </Tooltip>
 
             <Tooltip>
@@ -338,7 +361,7 @@ export function FileExplorer({
                   <RefreshCw className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Osveži stablo fajlova</TooltipContent>
+              <TooltipContent>{t("analysis.refresh")}</TooltipContent>
             </Tooltip>
 
             {onCloseProject && (

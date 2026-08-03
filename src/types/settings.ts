@@ -1,4 +1,7 @@
 export interface AppSettings {
+  general: {
+    language: 'sr' | 'en'
+  }
   llm: {
     ollamaUrl: string
     model: string
@@ -20,6 +23,9 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  general: {
+    language: 'sr',
+  },
   llm: {
     ollamaUrl: 'http://localhost:11434',
     model: 'gemma4:e4b',

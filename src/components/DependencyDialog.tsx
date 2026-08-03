@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface DependencyDialogProps {
   open: boolean
@@ -29,6 +30,7 @@ export function DependencyDialog({
   cppcheckVersion,
   onRecheck,
 }: DependencyDialogProps) {
+  const { t } = useTranslation()
   const missingCount = (gccDetected === false ? 1 : 0) + (cppcheckDetected === false ? 1 : 0)
 
   return (
@@ -37,10 +39,10 @@ export function DependencyDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Terminal className="h-5 w-5 text-primary" />
-            Sistemske zavisnosti (GCC & Cppcheck)
+            {t("dialogs.dependency.title")}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Za punu funkcionalnost kompilacije, izvršavanja i statičke analize C koda, na sistemu moraju biti instalirani <strong className="text-foreground">GCC</strong> i <strong className="text-foreground">Cppcheck</strong>.
+            {t("dialogs.dependency.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -56,14 +58,14 @@ export function DependencyDialog({
                   ) : (
                     <XCircle className="h-4 w-4 text-red-400" />
                   )}
-                  GCC Prevodilac
+                  {t("dialogs.dependency.gccTitle")}
                 </span>
                 <Badge variant={gccDetected ? "secondary" : "destructive"} className="text-[10px] px-1.5 py-0 h-4">
-                  {gccDetected ? "Detektovan" : "Nedostaje"}
+                  {gccDetected ? t("dialogs.dependency.installed") : t("dialogs.dependency.notInstalled")}
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
-                {gccDetected ? (gccVersion || "Instaliran na sistemu") : "GCC nije pronađen u PATH-u"}
+                {gccDetected ? (gccVersion || t("dialogs.dependency.installed")) : t("dialogs.dependency.notInstalled")}
               </p>
             </div>
 
@@ -76,14 +78,14 @@ export function DependencyDialog({
                   ) : (
                     <XCircle className="h-4 w-4 text-red-400" />
                   )}
-                  Cppcheck Analyzer
+                  {t("dialogs.dependency.cppcheckTitle")}
                 </span>
                 <Badge variant={cppcheckDetected ? "secondary" : "destructive"} className="text-[10px] px-1.5 py-0 h-4">
-                  {cppcheckDetected ? "Detektovan" : "Nedostaje"}
+                  {cppcheckDetected ? t("dialogs.dependency.installed") : t("dialogs.dependency.notInstalled")}
                 </Badge>
               </div>
               <p className="text-[11px] text-muted-foreground truncate">
-                {cppcheckDetected ? (cppcheckVersion || "Instaliran na sistemu") : "Cppcheck nije pronađen u PATH-u"}
+                {cppcheckDetected ? (cppcheckVersion || t("dialogs.dependency.installed")) : t("dialogs.dependency.notInstalled")}
               </p>
             </div>
           </div>
@@ -133,11 +135,11 @@ export function DependencyDialog({
           {onRecheck && (
             <Button variant="outline" size="sm" onClick={onRecheck} className="gap-1.5 text-xs">
               <RefreshCw className="h-3.5 w-3.5" />
-              Ponovo proveri
+              {t("dialogs.dependency.recheck")}
             </Button>
           )}
           <Button size="sm" onClick={() => onOpenChange(false)} className="text-xs">
-            U redu
+            {t("common.ok")}
           </Button>
         </DialogFooter>
       </DialogContent>

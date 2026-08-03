@@ -4,6 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 export interface TerminalLine {
   id: number
@@ -24,6 +25,7 @@ export function OutputPanel({
   onSendStdin,
   onClear,
 }: OutputPanelProps) {
+  const { t } = useTranslation()
   const [stdinInput, setStdinInput] = useState("")
   const terminalEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -51,12 +53,13 @@ export function OutputPanel({
       <div className="flex h-7 items-center justify-between bg-background border-b px-3 shrink-0">
         <div className="flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Terminal</span>
+          <span className="text-xs text-muted-foreground">{t("output.title")}</span>
         </div>
         <button
           className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-30"
           onClick={onClear}
           disabled={terminalOutput.length === 0}
+          title={t("output.clear")}
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -64,7 +67,7 @@ export function OutputPanel({
       <ScrollArea className="flex-1">
         <div className="p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all">
           {terminalOutput.length === 0 ? (
-            <p className="text-muted-foreground italic font-sans">Kliknite "Pokreni" za kompajliranje i izvršavanje...</p>
+            <p className="text-muted-foreground italic font-sans">{t("output.programStarted")}</p>
           ) : (
             terminalOutput.map((line) => (
               <span
@@ -88,7 +91,7 @@ export function OutputPanel({
           ref={inputRef}
           value={stdinInput}
           onChange={(e) => setStdinInput(e.target.value)}
-          placeholder={isRunning ? "Unesite ulaz za program..." : "Pokrenite program za unos..."}
+          placeholder={t("output.placeholder")}
           className="h-8 text-xs font-mono"
           disabled={!isRunning}
         />

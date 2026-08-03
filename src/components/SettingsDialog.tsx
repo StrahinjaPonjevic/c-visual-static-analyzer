@@ -9,6 +9,7 @@ import {
   Code,
   ShieldCheck,
   PenTool,
+  Globe,
 } from "lucide-react"
 import {
   Dialog,
@@ -28,6 +29,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import type { AppSettings } from "@/types/settings"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface SettingsDialogProps {
   open: boolean
@@ -61,11 +63,12 @@ function SettingsSelect({
 }
 
 function StatusBadge({ status, version }: { status: "loading" | "ok" | "missing"; version?: string }) {
+  const { t } = useTranslation()
   if (status === "loading") {
     return (
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Loader2 className="h-3 w-3 animate-spin" />
-        <span>Proveravam...</span>
+        <span>{t("common.checking")}</span>
       </div>
     )
   }
@@ -73,24 +76,26 @@ function StatusBadge({ status, version }: { status: "loading" | "ok" | "missing"
     return (
       <div className="flex items-center gap-1.5 text-xs text-emerald-400">
         <CheckCircle className="h-3 w-3" />
-        <span>{version || "Dostupno"}</span>
+        <span>{version || t("common.available")}</span>
       </div>
     )
   }
   return (
     <div className="flex items-center gap-1.5 text-xs text-red-400">
       <XCircle className="h-3 w-3" />
-      <span>Nije pronađeno</span>
+      <span>{t("common.notFound")}</span>
     </div>
   )
 }
 
 export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDialogProps) {
+  const { t } = useTranslation()
   const [local, setLocal] = useState<AppSettings>(settings)
   const [cppcheckStatus, setCppcheckStatus] = useState<"loading" | "ok" | "missing">("loading")
   const [cppcheckVersion, setCppcheckVersion] = useState<string>("")
   const [ollamaStatus, setOllamaStatus] = useState<"loading" | "ok" | "missing">("loading")
   const [sections, setSections] = useState<Record<string, boolean>>({
+    general: true,
     llm: true,
     compiler: true,
     cppcheck: true,
@@ -146,12 +151,39 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="!max-w-none" style={{ width: 450 }}>
         <DialogHeader>
-          <DialogTitle>Podešavanja</DialogTitle>
-          <DialogDescription>Konfigurišite podešavanja aplikacije</DialogDescription>
+          <DialogTitle>{t("settings.title")}</DialogTitle>
+          <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="h-[420px] -mx-6 px-6">
           <div className="space-y-1">
+            {/* General */}
+            <Collapsible open={sections.general} onOpenChange={() => toggleSection("general")}>
+              <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+                {sections.general ? (
+                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform" />
+                )}
+                <Globe className="h-3.5 w-3.5" />
+                {t("settings.general")}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-1 pb-2 space-y-2">
+                <Card className="border shadow-none">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">{t("settings.language")}</span>
+                    <SettingsSelect
+                      value={local.general?.language || "sr"}
+                      onChange={(v) => update("general", "language", v as "sr" | "en")}
+                      options={[
+                        { value: "sr", label: "Srpski" },
+                        { value: "en", label: "English" },
+                      ]}
+                    />
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
             {/* AI / Ollama */}
             <Collapsible open={sections.llm} onOpenChange={() => toggleSection("llm")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
@@ -201,12 +233,12 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
                 <Code className="h-3.5 w-3.5" />
-                Kompajler
+                {t("settings.compiler")}
               </CollapsibleTrigger>
               <CollapsibleContent className="pt-1 pb-2 space-y-2">
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">C standard</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.cStandard")}</span>
                     <SettingsSelect
                       value={local.compiler.cStandard}
                       onChange={(v) => update("compiler", "cStandard", v)}
@@ -221,7 +253,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                 </Card>
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Dodatne zastavice</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.extraFlags")}</span>
                     <Input
                       value={local.compiler.extraFlags}
                       onChange={(e) => update("compiler", "extraFlags", e.target.value)}
@@ -242,7 +274,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Cppcheck
+                {t("settings.cppcheck")}
                 <div className="ml-auto">
                   <StatusBadge status={cppcheckStatus} version={cppcheckVersion} />
                 </div>
@@ -250,7 +282,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
               <CollapsibleContent className="pt-1 pb-2 space-y-2">
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Automatska analiza</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.autoAnalyze")}</span>
                     <button
                       type="button"
                       onClick={() => update("cppcheck", "autoAnalyze", !local.cppcheck.autoAnalyze)}
@@ -268,7 +300,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                 </Card>
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Debounce (ms)</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.debounceMs")}</span>
                     <Input
                       type="number"
                       value={local.cppcheck.debounceMs}
@@ -284,7 +316,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                 </Card>
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Dodatne zastavice</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.extraFlags")}</span>
                     <Input
                       value={local.cppcheck.extraFlags}
                       onChange={(e) => update("cppcheck", "extraFlags", e.target.value)}
@@ -305,12 +337,12 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
                 <PenTool className="h-3.5 w-3.5" />
-                Editor
+                {t("settings.editor")}
               </CollapsibleTrigger>
               <CollapsibleContent className="pt-1 pb-2 space-y-2">
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Veličina fonta</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.fontSize")}</span>
                     <Input
                       type="number"
                       value={local.editor.fontSize}
@@ -326,7 +358,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                 </Card>
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Veličina taba</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.tabSize")}</span>
                     <SettingsSelect
                       value={String(local.editor.tabSize)}
                       onChange={(v) => update("editor", "tabSize", Number(v))}
@@ -340,13 +372,13 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
                 </Card>
                 <Card className="border shadow-none">
                   <CardContent className="p-3 flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Prelom linija</span>
+                    <span className="text-sm text-muted-foreground">{t("settings.wordWrap")}</span>
                     <SettingsSelect
                       value={local.editor.wordWrap}
-                      onChange={(v) => update("editor", "wordWrap", v)}
+                      onChange={(v) => update("editor", "wordWrap", v as "on" | "off")}
                       options={[
-                        { value: "off", label: "Isključen" },
-                        { value: "on", label: "Uključen" },
+                        { value: "off", label: t("settings.wordWrapOff") },
+                        { value: "on", label: t("settings.wordWrapOn") },
                       ]}
                     />
                   </CardContent>
@@ -358,10 +390,10 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose}>
-            Otkaži
+            {t("settings.cancel")}
           </Button>
           <Button onClick={handleSave}>
-            Sačuvaj
+            {t("settings.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

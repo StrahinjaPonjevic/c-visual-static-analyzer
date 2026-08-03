@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { FileWarning } from "lucide-react"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface UnsavedChangesDialogProps {
   open: boolean
@@ -24,6 +25,8 @@ export function UnsavedChangesDialog({
   onDiscard,
   onCancel,
 }: UnsavedChangesDialogProps) {
+  const { t } = useTranslation()
+
   return (
     <Dialog open={open} onOpenChange={(open) => { if (!open) onCancel() }}>
       <DialogContent className="sm:max-w-md">
@@ -33,24 +36,24 @@ export function UnsavedChangesDialog({
               <FileWarning className="h-5 w-5 text-amber-400" />
             </div>
             <div>
-              <DialogTitle>Nesačuvane promene</DialogTitle>
+              <DialogTitle>{t("dialogs.unsaved.title")}</DialogTitle>
               <DialogDescription>
                 {fileName
-                  ? `Fajl "${fileName}" ima nesačuvane promene.`
-                  : "Trenutni fajl ima nesačuvane promene."}
+                  ? `${t("dialogs.unsaved.description")} (${fileName})`
+                  : t("dialogs.unsaved.description")}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onCancel}>
-            Odustani
+            {t("dialogs.unsaved.cancel")}
           </Button>
           <Button variant="secondary" onClick={onDiscard}>
-            Ne sačuvaj
+            {t("dialogs.unsaved.dontSave")}
           </Button>
           <Button variant="default" onClick={onSave}>
-            Sačuvaj
+            {t("dialogs.unsaved.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,6 @@
 import { FilePlus, FolderOpen, FolderTree, Code2, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface EmptyStateProps {
   onNew: () => void
@@ -8,6 +9,8 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center bg-background p-4 sm:p-6 text-center select-none overflow-y-auto min-h-0">
       <div className="flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 mb-3 sm:mb-4 shadow-sm shrink-0">
@@ -18,7 +21,7 @@ export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
         C Visual Static Analyzer
       </h2>
       <p className="text-xs text-muted-foreground max-w-md mb-5 sm:mb-6 leading-relaxed px-2">
-        Nema otvorenih fajlova. Otvorite postojeći C fajl, projekat ili kreirajte novi fajl da biste započeli rad i analizu koda.
+        {t("dialogs.emptyState.subtitle")}
       </p>
 
       {/* Quick Action Buttons */}
@@ -28,7 +31,7 @@ export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
           className="gap-2 text-xs font-medium px-4 h-9 shadow-sm"
         >
           <FilePlus className="h-4 w-4" />
-          Novi fajl
+          {t("dialogs.emptyState.newFile")}
         </Button>
         <Button
           variant="outline"
@@ -36,7 +39,7 @@ export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
           className="gap-2 text-xs font-medium px-4 h-9 border-border/80 hover:bg-muted"
         >
           <FolderOpen className="h-4 w-4 text-blue-400" />
-          Otvori fajl
+          {t("dialogs.emptyState.openFile")}
         </Button>
         <Button
           variant="outline"
@@ -44,7 +47,7 @@ export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
           className="gap-2 text-xs font-medium px-4 h-9 border-border/80 hover:bg-muted"
         >
           <FolderTree className="h-4 w-4 text-amber-400" />
-          Otvori projekat
+          {t("dialogs.emptyState.openFolder")}
         </Button>
       </div>
 
@@ -52,23 +55,23 @@ export function EmptyState({ onNew, onOpen, onOpenFolder }: EmptyStateProps) {
       <div className="rounded-xl border bg-card/50 p-3.5 sm:p-4 max-w-sm w-full text-left space-y-2 sm:space-y-2.5 shadow-none">
         <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <Terminal className="h-3.5 w-3.5 text-primary" />
-          Tastaturne prečice
+          Prečice na tastaturi
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Novi fajl</span>
+          <span className="text-muted-foreground">{t("dialogs.emptyState.newFile")}</span>
           <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] border text-foreground">Ctrl + N</kbd>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Otvori fajl</span>
+          <span className="text-muted-foreground">{t("dialogs.emptyState.openFile")}</span>
           <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] border text-foreground">Ctrl + O</kbd>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Otvori projekat</span>
+          <span className="text-muted-foreground">{t("dialogs.emptyState.openFolder")}</span>
           <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] border text-foreground">Ctrl + Shift + O</kbd>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Kompajliraj i pokreni</span>
-          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] border text-foreground">F5 / Ctrl + R</kbd>
+          <span className="text-muted-foreground">{t("toolbar.run")}</span>
+          <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] border text-foreground">F5</kbd>
         </div>
       </div>
     </div>

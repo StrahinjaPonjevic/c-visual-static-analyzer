@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/collapsible"
 import type { CppcheckIssue, GccError } from "@/types"
 import { computeMetrics } from "@/analysis/parsers"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 export interface ExplainWithAiItem {
   line: number
@@ -88,6 +89,7 @@ export function StaticAnalysisPanel({
   onSelectFile,
   onExplainWithAi,
 }: StaticAnalysisPanelProps) {
+  const { t } = useTranslation()
   const metrics = useMemo(() => computeMetrics(code), [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
@@ -120,20 +122,17 @@ export function StaticAnalysisPanel({
     return list
   }, [cppcheckIssues, gccErrors])
 
-  const errorCount = combinedIssues.filter((i) => i.severity === "error").length
-  const warningCount = combinedIssues.filter((i) => i.severity === "warning" || i.severity === "style" || i.severity === "performance" || i.severity === "portability").length
-
   const metricCards = [
-    { icon: Hash, label: "Linija koda", value: metrics.lines },
-    { icon: FunctionSquare, label: "Funkcija", value: metrics.functions },
-    { icon: Activity, label: "Ciklomačka složenost", value: metrics.cyclomaticComplexity },
-    { icon: ShieldAlert, label: "Rizik curenja", value: metrics.memoryLeakRisk ? "⚠️ Da" : "✅ Ne" },
+    { icon: Hash, label: t("analysis.linesOfCode"), value: metrics.lines },
+    { icon: FunctionSquare, label: t("analysis.functions"), value: metrics.functions },
+    { icon: Activity, label: t("analysis.complexity"), value: metrics.cyclomaticComplexity },
+    { icon: ShieldAlert, label: t("analysis.memoryRisk"), value: metrics.memoryLeakRisk ? `⚠️ ${t("common.yes")}` : `✅ ${t("common.no")}` },
     { icon: GitBranch, label: "If/Else", value: metrics.ifStatements },
-    { icon: GitBranch, label: "Petlje", value: metrics.loops },
-    { icon: Braces, label: "Nizovi", value: metrics.arrays },
-    { icon: Sigma, label: "Pokazivači", value: metrics.pointers },
+    { icon: GitBranch, label: "Loops", value: metrics.loops },
+    { icon: Braces, label: "Arrays", value: metrics.arrays },
+    { icon: Sigma, label: "Pointers", value: metrics.pointers },
     { icon: FileType, label: "Struct", value: metrics.structs },
-    { icon: MessageSquare, label: "Komentara", value: metrics.comments },
+    { icon: MessageSquare, label: "Comments", value: metrics.comments },
     { icon: Package, label: "malloc/free", value: `${metrics.mallocCalls}/${metrics.freeCalls}` },
     { icon: Package, label: "#include", value: metrics.includes },
   ]
@@ -144,7 +143,7 @@ export function StaticAnalysisPanel({
 <html lang="sr">
 <head>
   <meta charset="UTF-8">
-  <title>Izveštaj Statičke Analize Koda - C Visual Static Analyzer</title>
+  <title>${t("analysis.title")} - C Visual Static Analyzer</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; margin: 40px; color: #0f172a; background: #f8fafc; line-height: 1.5; }
     h1 { color: #0f172a; border-bottom: 2px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 4px; }
@@ -164,31 +163,31 @@ export function StaticAnalysisPanel({
   </style>
 </head>
 <body>
-  <h1>📊 Izveštaj Statičke Analize Koda</h1>
-  <div class="subtitle">Generisano pomoću <strong>C Visual Static Analyzer</strong> | Datum: ${new Date().toLocaleString('sr-RS')}</div>
+  <h1>📊 ${t("analysis.title")}</h1>
+  <div class="subtitle">C Visual Static Analyzer | ${new Date().toLocaleString()}</div>
 
   <div class="section">
-    <h2>📈 Metrike Koda</h2>
+    <h2>📈 ${t("analysis.metricsTitle")}</h2>
     <div class="grid">
-      <div class="card"><div class="card-value">${metrics.lines}</div><div class="card-label">Linije koda</div></div>
-      <div class="card"><div class="card-value">${metrics.functions}</div><div class="card-label">Funkcija</div></div>
-      <div class="card"><div class="card-value">${metrics.cyclomaticComplexity}</div><div class="card-label">Ciklomačka složenost</div></div>
+      <div class="card"><div class="card-value">${metrics.lines}</div><div class="card-label">${t("analysis.linesOfCode")}</div></div>
+      <div class="card"><div class="card-value">${metrics.functions}</div><div class="card-label">${t("analysis.functions")}</div></div>
+      <div class="card"><div class="card-value">${metrics.cyclomaticComplexity}</div><div class="card-label">${t("analysis.complexity")}</div></div>
       <div class="card"><div class="card-value">${metrics.mallocCalls} / ${metrics.freeCalls}</div><div class="card-label">malloc / free</div></div>
-      <div class="card"><div class="card-value">${metrics.pointers}</div><div class="card-label">Pokazivači</div></div>
-      <div class="card"><div class="card-value">${metrics.memoryLeakRisk ? "⚠️ Da" : "✅ Ne"}</div><div class="card-label">Rizik curenja memorije</div></div>
+      <div class="card"><div class="card-value">${metrics.pointers}</div><div class="card-label">Pointers</div></div>
+      <div class="card"><div class="card-value">${metrics.memoryLeakRisk ? `⚠️ ${t("common.yes")}` : `✅ ${t("common.no")}`}</div><div class="card-label">${t("analysis.memoryRisk")}</div></div>
     </div>
   </div>
 
   <div class="section">
-    <h2>🔍 Detektovani Problemi (${combinedIssues.length})</h2>
-    ${combinedIssues.length === 0 ? '<p style="color:#16a34a; font-weight:600; font-size: 15px;">✅ Nema detektovanih problema u kodu!</p>' : `
+    <h2>🔍 ${t("analysis.issuesTitle")} (${combinedIssues.length})</h2>
+    ${combinedIssues.length === 0 ? `<p style="color:#16a34a; font-weight:600; font-size: 15px;">✅ ${t("analysis.noIssues")}</p>` : `
     <table>
       <thead>
         <tr>
-          <th>Izvor</th>
-          <th>Linija</th>
-          <th>Tip</th>
-          <th>Poruka</th>
+          <th>Source</th>
+          <th>Line</th>
+          <th>Type</th>
+          <th>Message</th>
         </tr>
       </thead>
       <tbody>
@@ -225,17 +224,17 @@ export function StaticAnalysisPanel({
             <div className="flex items-center justify-between">
               <CollapsibleTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 flex-1">
                 {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
-                Metrike
+                {t("analysis.metricsTitle")}
               </CollapsibleTrigger>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
                 onClick={handleExportReport}
-                title="Izvezi HTML izveštaj analize"
+                title={t("analysis.exportReport")}
               >
                 <Download className="h-3 w-3 text-cyan-400" />
-                <span>Izvezi izveštaj</span>
+                <span>{t("analysis.exportReport")}</span>
               </Button>
             </div>
             <CollapsibleContent className="pt-2">
@@ -261,14 +260,10 @@ export function StaticAnalysisPanel({
           <Collapsible open={issuesOpen} onOpenChange={setIssuesOpen}>
             <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
               {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
-              Problemi
+              {t("analysis.issuesTitle")}
               {combinedIssues.length > 0 && (
                 <span className="text-muted-foreground/60 font-normal">
-                  ({errorCount > 0 && warningCount > 0
-                    ? `${errorCount} grešaka, ${warningCount} upozorenja`
-                    : errorCount > 0
-                      ? `${errorCount} grešaka`
-                      : `${warningCount} upozorenja`})
+                  ({t("analysis.summary", { count: combinedIssues.length })})
                 </span>
               )}
               <div className="ml-auto" />
@@ -289,8 +284,7 @@ export function StaticAnalysisPanel({
               {combinedIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle className="h-8 w-8 text-emerald-400 mb-2" />
-                  <p className="text-sm font-medium text-muted-foreground">Nema pronađenih problema</p>
-                  <p className="text-xs text-muted-foreground mt-1">Kod izgleda čist!</p>
+                  <p className="text-sm font-medium text-muted-foreground">{t("analysis.noIssues")}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -319,7 +313,7 @@ export function StaticAnalysisPanel({
                               )}
                               {issue.line > 0 && (
                                 <span className="text-xs text-muted-foreground font-medium">
-                                  Linija {issue.line}
+                                  {t("statusBar.line")} {issue.line}
                                 </span>
                               )}
                               <Badge
@@ -341,7 +335,7 @@ export function StaticAnalysisPanel({
                                 }}
                               >
                                 <Sparkles className="h-3 w-3 text-amber-400" />
-                                <span>Objasni sa AI</span>
+                                <span>{t("analysis.explainWithAi")}</span>
                               </Button>
                             </div>
                           </div>

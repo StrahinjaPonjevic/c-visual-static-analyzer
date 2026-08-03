@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { useTranslation } from "@/i18n/LanguageContext"
 
 interface ToolbarProps {
   onNew: () => void
@@ -67,6 +68,8 @@ export function Toolbar({
   mode,
   projectName,
 }: ToolbarProps) {
+  const { t } = useTranslation()
+
   return (
     <div className="flex h-10 items-center border-b bg-secondary px-2 gap-1">
       <div className="flex items-center gap-0.5">
@@ -84,7 +87,7 @@ export function Toolbar({
               <FolderTree className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>File Explorer ({mode === 'project' ? 'Projekat' : 'Pojedinačni fajl'})</TooltipContent>
+          <TooltipContent>{t("toolbar.toggleExplorer")} ({mode === 'project' ? t("explorer.project") : t("toolbar.singleMode")})</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -98,7 +101,7 @@ export function Toolbar({
               <FilePlus className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Novi fajl (Ctrl+N)</TooltipContent>
+          <TooltipContent>{t("toolbar.newFile")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -112,13 +115,13 @@ export function Toolbar({
               <FolderOpen className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Otvori fajl (Ctrl+O)</TooltipContent>
+          <TooltipContent>{t("toolbar.openFile")}</TooltipContent>
         </Tooltip>
 
         {mode === 'project' ? (
           <div className="flex items-center gap-1 bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-md text-xs font-medium">
             <FolderOpen className="h-3.5 w-3.5" />
-            <span className="max-w-[120px] truncate">{projectName || "Projekat"}</span>
+            <span className="max-w-[120px] truncate">{projectName || t("explorer.project")}</span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -129,7 +132,7 @@ export function Toolbar({
                   <X className="h-3 w-3" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent>Zatvori projekat (Ctrl+Shift+W)</TooltipContent>
+              <TooltipContent>{t("toolbar.closeProject")}</TooltipContent>
             </Tooltip>
           </div>
         ) : (
@@ -142,10 +145,10 @@ export function Toolbar({
                 onClick={onOpenFolder}
               >
                 <FolderOpen className="h-4 w-4 text-amber-400" />
-                <span>Otvori Projekat</span>
+                <span>{t("dialogs.emptyState.openFolder")}</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Otvori projekat / folder (Ctrl+Shift+O)</TooltipContent>
+            <TooltipContent>{t("toolbar.openFolder")}</TooltipContent>
           </Tooltip>
         )}
 
@@ -160,7 +163,7 @@ export function Toolbar({
               <Save className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Snimi (Ctrl+S)</TooltipContent>
+          <TooltipContent>{t("toolbar.save")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -174,7 +177,7 @@ export function Toolbar({
               <Undo2 className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Poništi (Ctrl+Z)</TooltipContent>
+          <TooltipContent>{t("toolbar.undo")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -188,7 +191,7 @@ export function Toolbar({
               <Redo2 className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Ponovi (Ctrl+Y)</TooltipContent>
+          <TooltipContent>{t("toolbar.redo")}</TooltipContent>
         </Tooltip>
       </div>
 
@@ -215,12 +218,12 @@ export function Toolbar({
                 <Play className="h-4 w-4" />
               )}
               <span className="text-xs font-medium transition-opacity">
-                {isCompiling ? "Kompajliranje..." : isRunning ? "Zaustavi" : "Pokreni"}
+                {isCompiling ? t("toolbar.compiling") : isRunning ? t("toolbar.stop") : t("toolbar.run").split(" ")[0]}
               </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {isCompiling ? "Kompajliranje..." : isRunning ? "Zaustavi program" : "Kompajliraj i pokreni"}
+            {isCompiling ? t("toolbar.compiling") : isRunning ? t("toolbar.stop") : t("toolbar.run")}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -244,7 +247,7 @@ export function Toolbar({
               <Bot className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>AI Asistent</TooltipContent>
+          <TooltipContent>{t("toolbar.toggleAi")}</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -261,7 +264,7 @@ export function Toolbar({
               <BarChart3 className="h-4 w-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Statistička Analiza</TooltipContent>
+          <TooltipContent>{t("toolbar.toggleAnalysis")}</TooltipContent>
         </Tooltip>
       </div>
 
@@ -279,7 +282,7 @@ export function Toolbar({
             <Settings className="h-4 w-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Podešavanja</TooltipContent>
+        <TooltipContent>{t("toolbar.settings")}</TooltipContent>
       </Tooltip>
     </div>
   )

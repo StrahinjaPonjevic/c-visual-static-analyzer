@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Toaster, toast } from "sonner"
 import type { OnMount } from "@monaco-editor/react"
+import { LanguageProvider } from "@/i18n/LanguageContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -247,17 +248,11 @@ export function App() {
   }, [code, runCppcheckSingle, runCppcheckProject])
 
   // ---- AI Chat state ----
-  const INITIAL_AI_GREETING: Message = useMemo(() => ({
-    id: 1,
-    role: "assistant",
-    content: "Zdravo! Ja sam vaš AI asistent za programiranje. Mogu vam pomoći sa objašnjavanjem koda, pronalaženjem grešaka i učenjem C programiranja. Kako mogu da pomognem?",
-  }), [])
-
-  const [messages, setMessages] = useState<Message[]>([INITIAL_AI_GREETING])
+  const [messages, setMessages] = useState<Message[]>([])
   const [aiInput, setAiInput] = useState("")
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
-  const aiMessageIdRef = useRef(2)
+  const aiMessageIdRef = useRef(1)
   const aiStreamingRef = useRef(false)
   const aiThinkingChunksRef = useRef("")
   const aiContentChunksRef = useRef("")
@@ -384,7 +379,6 @@ export function App() {
     }
 
     for (const msg of messages) {
-      if (msg.id === 1) continue
       if (msg.isStreaming) continue
       if (!msg.content) continue
       apiMessages.push({ role: msg.role, content: msg.content })
@@ -433,8 +427,8 @@ export function App() {
     setIsAiLoading(false)
     setAiError(null)
     setAiInput("")
-    setMessages([INITIAL_AI_GREETING])
-  }, [INITIAL_AI_GREETING])
+    setMessages([])
+  }, [])
 
   const handleExplainWithAi = useCallback((item: ExplainWithAiItem) => {
     setActiveSideTab('ai')
@@ -1151,9 +1145,10 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     : null
 
   return (
-    <TooltipProvider>
-      <div className="flex h-screen flex-col bg-background text-foreground dark">
-        <TitleBar filePath={activeFilePath} onClose={handleClose} isDirty={isDirty} />
+    <LanguageProvider language={settings.general?.language || 'sr'}>
+      <TooltipProvider>
+        <div className="flex h-screen flex-col bg-background text-foreground dark">
+          <TitleBar filePath={activeFilePath} onClose={handleClose} isDirty={isDirty} />
         <Toolbar
           onNew={handleNew}
           onOpen={handleOpen}
@@ -1345,6 +1340,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         <Toaster position="bottom-right" theme="dark" richColors />
       </div>
     </TooltipProvider>
+  </LanguageProvider>
   )
 }
 
