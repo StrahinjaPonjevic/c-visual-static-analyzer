@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import type { CodeMarker } from '@/types'
+import { useTranslation } from '@/i18n/LanguageContext'
 
 type MonacoEditorInstance = Parameters<OnMount>[0]
 
@@ -33,6 +34,7 @@ export default function Editor({
     filePath,
     theme = 'vs-dark',
 }: Props) {
+    const { t } = useTranslation()
     const [editorInstance, setEditorInstance] = useState<MonacoEditorInstance | null>(null)
     const decorationIdsRef = useRef<string[]>([])
     const onExplainWithAiRef = useRef(onExplainWithAi)
@@ -44,7 +46,7 @@ export default function Editor({
 
         monacoEditor.addAction({
             id: 'explain-line-with-ai',
-            label: '✨ Objasni ovu liniju sa AI',
+            label: t("editor.explainLineWithAi"),
             contextMenuGroupId: 'navigation',
             contextMenuOrder: 1.5,
             run: (ed) => {

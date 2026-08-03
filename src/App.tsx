@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Toaster, toast } from "sonner"
 import type { OnMount } from "@monaco-editor/react"
-import { LanguageProvider } from "@/i18n/LanguageContext"
+import { LanguageProvider, useTranslation } from "@/i18n/LanguageContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -44,16 +44,10 @@ export interface Message {
   isStreaming?: boolean
 }
 
-const SYSTEM_PROMPT = `Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš korisnicima da:
-- Razumeju strukturu i logiku C koda
-- Pronađu i isprave greške (sintaktičke, logičke, memorijske)
-- Nauče najbolje prakse u C programiranju
-- Razumeju pokazivače, strukture, dinamičku alokaciju memorije
-- Interpretiraju GCC warning i error poruke
 
-Odgovaraj kratko, stručno i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno.`
 
-export function App() {
+function AppMain() {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<'single' | 'project'>('single')
   const modeRef = useRef(mode)
   modeRef.current = mode
@@ -361,7 +355,7 @@ export function App() {
     aiContentChunksRef.current = ""
 
     const apiMessages: { role: string; content: string }[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: t("ai.systemPrompt") },
     ]
 
     if (modeRef.current === 'project' && projectPathRef.current) {
@@ -387,7 +381,7 @@ export function App() {
     apiMessages.push({ role: "user", content: aiInput })
 
     window.api.sendChatMessage(apiMessages)
-  }, [aiInput, isAiLoading, messages, projectName])
+  }, [aiInput, isAiLoading, messages, projectName, t])
 
   const handleAiStop = useCallback(() => {
     window.api.stopGeneration()
@@ -445,27 +439,27 @@ export function App() {
       codeContext = codeLines.slice(startLine, endLine).map((l, idx) => `${startLine + idx + 1}: ${l}`).join('\n')
     }
 
-    const sourceName = item.source === 'gcc' ? 'GCC prevodioca' : 'Cppcheck statičke analize'
+    const sourceName = item.source === 'gcc' ? t("ai.explainPrompt.gccSource") : t("ai.explainPrompt.cppcheckSource")
     const fileName = item.filePath ? item.filePath.split(/[/\\]/).pop() : (activeFilePathRef.current ? activeFilePathRef.current.split(/[/\\]/).pop() : 'main.c')
 
-    const prompt = `Molim te da mi objasniš sledeću poruku iz ${sourceName}:
+    const prompt = `${t("ai.explainPrompt.intro", { source: sourceName })}
 
-Fajl: ${fileName}
-Linija: ${item.line}
-Nivo: ${item.severity || 'problem'}
-Poruka greške: "${item.message}"
+${t("ai.explainPrompt.file")}: ${fileName}
+${t("ai.explainPrompt.line")}: ${item.line}
+${t("ai.explainPrompt.severity")}: ${item.severity || 'issue'}
+${t("ai.explainPrompt.message")}: "${item.message}"
 
-Tačna linija koda (Linija ${item.line}):
+${t("ai.explainPrompt.exactLine", { line: item.line })}
 \`\`\`c
-${lineContent || '(Nepoznata linija)'}
+${lineContent || ''}
 \`\`\`
 
-Kontekst koda oko linije ${item.line}:
+${t("ai.explainPrompt.context", { line: item.line })}
 \`\`\`c
 ${codeContext || codeRef.current}
 \`\`\`
 
-Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je ispravim u svom kodu na jasan način.`
+${t("ai.explainPrompt.question")}`
 
     const userMessage: Message = {
       id: aiMessageIdRef.current++,
@@ -488,25 +482,24 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     aiContentChunksRef.current = ""
 
     const apiMessages: { role: string; content: string }[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: t("ai.systemPrompt") },
     ]
 
     if (modeRef.current === 'project' && projectPathRef.current) {
       apiMessages.push({
         role: "system",
-        content: `Korisnik radi u Project Mode okruženju. Projekat: ${projectName || projectPathRef.current}. Aktivni fajl: ${activeFilePathRef.current || 'nema'}.`,
+        content: `Project: ${projectName || projectPathRef.current}. Active file: ${activeFilePathRef.current || 'none'}.`,
       })
     }
 
     if (codeRef.current.trim()) {
       apiMessages.push({
         role: "system",
-        content: `Trenutni kod u editoru (${activeFilePathRef.current || 'fajl'}):\n\`\`\`c\n${codeRef.current}\n\`\`\``,
+        content: `Current code in editor (${activeFilePathRef.current || 'file'}):\n\`\`\`c\n${codeRef.current}\n\`\`\``,
       })
     }
 
     for (const msg of messages) {
-      if (msg.id === 1) continue
       if (msg.isStreaming) continue
       if (!msg.content) continue
       apiMessages.push({ role: msg.role, content: msg.content })
@@ -515,7 +508,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     apiMessages.push({ role: "user", content: prompt })
 
     window.api.sendChatMessage(apiMessages)
-  }, [projectName, messages])
+  }, [messages, projectName, t])
 
 
   // ---- GCC compile & run state ----
@@ -584,9 +577,9 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         editor.pushUndoStop()
         editor.focus()
         handleCodeChange(editor.getValue())
-        toast.success("Predloženi kod je primenjen u editoru!", {
+        toast.success(t("toasts.codeApplied"), {
           action: {
-            label: "Vrati nazad (Ctrl+Z)",
+            label: t("toasts.undo"),
             onClick: () => handleUndo(),
           },
         })
@@ -595,13 +588,13 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     }
     handleCodeChange(newCode)
     setEditorKey((k) => k + 1)
-    toast.success("Predloženi kod je uspešno primenjen u editoru!", {
+    toast.success(t("toasts.codeApplied"), {
       action: {
-        label: "Vrati nazad (Ctrl+Z)",
+        label: t("toasts.undo"),
         onClick: () => handleUndo(),
       },
     })
-  }, [handleCodeChange, handleUndo])
+  }, [handleCodeChange, handleUndo, t])
 
   const handleSelectFile = useCallback(async (filePath: string) => {
     if (!openFilePaths.includes(filePath)) {
@@ -673,10 +666,10 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         if (modeRef.current === 'project' && projectPathRef.current) {
           runCppcheckProject(projectPathRef.current)
         }
-        toast.success("Fajl je uspešno sačuvan")
+        toast.success(t("toasts.fileSaved"))
         return targetPath
       }
-      toast.error(result.error || "Greška pri čuvanju fajla")
+      toast.error(result.error || t("toasts.fileSaveError"))
       return null
     } else {
       const defaultDir = projectPathRef.current || undefined
@@ -700,12 +693,12 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
           handleRefreshTree()
           runCppcheckProject(projectPathRef.current)
         }
-        toast.success("Fajl je uspešno sačuvan")
+        toast.success(t("toasts.fileSaved"))
         return newPath
       }
       return null
     }
-  }, [runCppcheckProject, handleRefreshTree])
+  }, [runCppcheckProject, handleRefreshTree, t])
 
   const handleCloseTab = useCallback((filePath: string) => {
     const fState = fileContentsRef.current[filePath]
@@ -919,7 +912,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     setTerminalOutput([])
     setGccErrors([])
 
-    setTerminalOutput((prev) => [...prev, { id: terminalIdRef.current++, type: "system", text: "$ Kompajliram..." }])
+    setTerminalOutput((prev) => [...prev, { id: terminalIdRef.current++, type: "system", text: t("output.compiling") }])
 
     try {
       let result: GccResult
@@ -940,7 +933,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
               setTerminalOutput((prev) => [...prev, {
                 id: terminalIdRef.current++,
                 type: "system",
-                text: `Greška pri čuvanju fajla "${fPath}": ${saveRes.error}`,
+                text: t("output.saveError", { filePath: fPath, error: saveRes.error || '' }),
               }])
               compilingRef.current = false
               setIsCompiling(false)
@@ -983,7 +976,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,
           type: "system",
-          text: `Greška: ${result.error}`,
+          text: t("output.compileError", { error: result.error || '' }),
         }])
         compilingRef.current = false
         setIsCompiling(false)
@@ -1007,19 +1000,19 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       }
 
       if (!result.success) {
-        toast.error("Kompajliranje neuspešno - postoje greške u kodu")
+        toast.error(t("toasts.compileFailed"))
         compilingRef.current = false
         setIsCompiling(false)
         return
       }
 
-      toast.success("Kompajliranje uspešno!")
+      toast.success(t("toasts.compileSuccess"))
 
       // Kompajliranje uspešno — pokreni program
       setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
-        text: "Kompajliranje uspešno. Pokrećem program...\n",
+        text: t("output.compilationSuccessfulStarting"),
       }])
 
       exePathRef.current = result.exePath || null
@@ -1029,7 +1022,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         setTerminalOutput((prev) => [...prev, {
           id: terminalIdRef.current++,
           type: "system",
-          text: `Greška pri pokretanju: ${runResult.error}`,
+          text: t("output.runError", { error: runResult.error || '' }),
         }])
         compilingRef.current = false
         setIsCompiling(false)
@@ -1045,10 +1038,10 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
-        text: `Neočekivana greška: ${err instanceof Error ? err.message : String(err)}`,
+        text: t("output.unexpectedError", { error: err instanceof Error ? err.message : String(err) }),
       }])
     }
-  }, [])
+  }, [t])
 
   const handleStop = useCallback(async () => {
     await window.api.killProgram()
@@ -1056,9 +1049,9 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     setTerminalOutput((prev) => [...prev, {
       id: terminalIdRef.current++,
       type: "system",
-      text: "Program zaustavljen.\n",
+      text: t("output.programStopped"),
     }])
-  }, [])
+  }, [t])
 
   const handleClearTerminal = useCallback(() => setTerminalOutput([]), [])
 
@@ -1104,7 +1097,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
-        text: `\nProgram završen sa izlaznim kodom: ${code ?? "?"}\n`,
+        text: t("output.programFinishedWithCode", { code: code ?? "?" }),
       }])
     })
 
@@ -1123,7 +1116,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
       cleanExit()
       cleanError()
     }
-  }, [])
+  }, [t])
 
   const handleUnsavedDialogClose = useCallback((action: 'save' | 'discard' | 'cancel') => {
     setShowUnsavedDialog(false)
@@ -1145,8 +1138,7 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
     : null
 
   return (
-    <LanguageProvider language={settings.general?.language || 'sr'}>
-      <TooltipProvider>
+    <TooltipProvider>
         <div className="flex h-screen flex-col bg-background text-foreground dark">
           <TitleBar filePath={activeFilePath} onClose={handleClose} isDirty={isDirty} />
         <Toolbar
@@ -1341,7 +1333,20 @@ Objasni mi šta ova greška tačno znači, zašto je do nje došlo i kako da je 
         <Toaster position="bottom-right" theme="dark" richColors />
       </div>
     </TooltipProvider>
-  </LanguageProvider>
+  )
+}
+
+export function App() {
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+
+  useEffect(() => {
+    window.api.getSettings().then(setSettings)
+  }, [])
+
+  return (
+    <LanguageProvider language={settings.general?.language || 'sr'}>
+      <AppMain />
+    </LanguageProvider>
   )
 }
 
