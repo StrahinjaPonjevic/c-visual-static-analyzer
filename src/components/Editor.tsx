@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import type { CodeMarker } from '@/types'
 import { useTranslation } from '@/i18n/LanguageContext'
@@ -20,6 +20,9 @@ type Props = {
     theme?: string
 }
 
+let globalCodeActionDisposable: { dispose: () => void } | null = null
+let isCommandRegistered = false
+
 export default function Editor({
     value,
     onChange,
@@ -40,9 +43,74 @@ export default function Editor({
     const onExplainWithAiRef = useRef(onExplainWithAi)
     onExplainWithAiRef.current = onExplainWithAi
 
-    const handleEditorMount: OnMount = (monacoEditor) => {
+    const tRef = useRef(t)
+    tRef.current = t
+
+    const markersRef = useRef(markers)
+    markersRef.current = markers
+
+    const monacoRef = useRef<Parameters<OnMount>[1] | null>(null)
+
+    const registerProvider = useCallback((monaco: Parameters<OnMount>[1]) => {
+        if (!isCommandRegistered) {
+            try {
+                monaco.editor.registerCommand('explain-line-with-ai-cmd', (_accessor: unknown, line: number, lineContent: string) => {
+                    onExplainWithAiRef.current?.(line, lineContent)
+                })
+                isCommandRegistered = true
+            } catch {
+                // Command already registered
+            }
+        }
+
+        if (globalCodeActionDisposable) {
+            globalCodeActionDisposable.dispose()
+            globalCodeActionDisposable = null
+        }
+
+        globalCodeActionDisposable = monaco.languages.registerCodeActionProvider('c', {
+            provideCodeActions: (
+                model: { getLineContent: (l: number) => string },
+                range: { startLineNumber: number },
+                context: { markers: readonly unknown[] }
+            ) => {
+                const line = range.startLineNumber
+                const lineContent = model.getLineContent(line)
+                const issueOnLine = markersRef.current && markersRef.current.find(m => m.line === line)
+                const hasIssue = context.markers.length > 0 || !!issueOnLine
+
+                if (!hasIssue) {
+                    return { actions: [], dispose: () => {} }
+                }
+
+                const actionTitle = tRef.current("editor.explainLineWithAi")
+
+                return {
+                    actions: [
+                        {
+                            title: actionTitle,
+                            kind: 'quickfix',
+                            diagnostics: context.markers as never[],
+                            isPreferred: true,
+                            command: {
+                                id: 'explain-line-with-ai-cmd',
+                                title: actionTitle,
+                                arguments: [line, lineContent],
+                            },
+                        },
+                    ],
+                    dispose: () => {},
+                }
+            },
+        })
+    }, [])
+
+    const handleEditorMount: OnMount = (monacoEditor, monaco) => {
         setEditorInstance(monacoEditor)
+        monacoRef.current = monaco
         onMount?.(monacoEditor)
+
+        registerProvider(monaco)
 
         monacoEditor.addAction({
             id: 'explain-line-with-ai',
@@ -71,6 +139,25 @@ export default function Editor({
 
     useEffect(() => {
         if (!editorInstance) return
+
+        const model = editorInstance.getModel()
+        const monaco = monacoRef.current
+
+        if (model && monaco) {
+            const monacoMarkers = (markers ?? []).map((m) => ({
+                startLineNumber: m.line,
+                startColumn: m.column || 1,
+                endLineNumber: m.line,
+                endColumn: m.column ? m.column + 5 : 100,
+                message: `[${m.source.toUpperCase()}] ${m.message}`,
+                severity: m.severity === 'error'
+                    ? monaco.MarkerSeverity.Error
+                    : m.severity === 'warning'
+                        ? monaco.MarkerSeverity.Warning
+                        : monaco.MarkerSeverity.Info,
+            }))
+            monaco.editor.setModelMarkers(model, 'c-analyzer', monacoMarkers)
+        }
 
         const newDecorations = (markers ?? []).map(m => ({
             range: {
@@ -125,7 +212,14 @@ export default function Editor({
                 defaultValue={normalizedValue}
                 onChange={handleChange}
                 theme={theme}
-                options={{ fontSize, tabSize, wordWrap, minimap: { enabled: false } }}
+                options={{
+                    fontSize,
+                    tabSize,
+                    wordWrap,
+                    minimap: { enabled: false },
+                    lightbulb: { enabled: 'on' as never },
+                    glyphMargin: true,
+                }}
                 onMount={handleEditorMount}
             />
         </div>

@@ -117,6 +117,22 @@
   border-left: 3px solid rgb(34, 197, 94);
 }
 
+/* Monaco Quick Fix Widget & Overlay Width Fix */
+.monaco-editor .quick-fix-widget,
+.monaco-editor .action-widget {
+  min-width: 220px !important;
+  max-width: 380px !important;
+  width: auto !important;
+}
+
+.monaco-editor .quick-fix-widget .action-label,
+.monaco-editor .action-widget .action-label {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  max-width: none !important;
+}
+
 .resize-handle {
   @apply relative flex items-center justify-center;
 }

@@ -197,7 +197,11 @@ function AppMain({ settings, onSaveSettings }: AppMainProps) {
     if (!activePath) return markers
     return markers.filter((m) => {
       if (!m.filePath) return true
-      return m.filePath === activePath || activePath.endsWith(m.filePath) || m.filePath.endsWith(activePath.split(/[/\\]/).pop()!)
+      const normM = m.filePath.replace(/\\/g, '/').toLowerCase()
+      const normA = activePath.replace(/\\/g, '/').toLowerCase()
+      const baseM = normM.split('/').pop()!
+      const baseA = normA.split('/').pop()!
+      return normM === normA || normA.endsWith(normM) || normM.endsWith(normA) || baseM === baseA
     })
   }, [markers, fileManager.activeFilePath])
 

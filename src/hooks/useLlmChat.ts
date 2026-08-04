@@ -61,6 +61,55 @@ export function useLlmChat({
   const aiThinkingChunksRef = useRef("")
   const aiContentChunksRef = useRef("")
 
+  const getStorageKey = useCallback(() => {
+    if (activeFilePathRef.current) {
+      return `chat_history_${activeFilePathRef.current}`
+    }
+    if (modeRef.current === 'project' && projectPathRef.current) {
+      return `chat_history_project_${projectPathRef.current}`
+    }
+    return 'chat_history_global'
+  }, [activeFilePathRef, modeRef, projectPathRef])
+
+  const activePath = activeFilePathRef.current
+  const projPath = projectPathRef.current
+  const currentMode = modeRef.current
+
+  // Load chat history when active file / project changes
+  useEffect(() => {
+    const key = getStorageKey()
+    try {
+      const saved = localStorage.getItem(key)
+      if (saved) {
+        const parsed = JSON.parse(saved) as Message[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed)
+          const maxId = parsed.reduce((max, m) => Math.max(max, m.id), 0)
+          aiMessageIdRef.current = maxId + 1
+          return
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setMessages([])
+  }, [activePath, projPath, currentMode, getStorageKey])
+
+  // Save chat history to localStorage when messages change
+  useEffect(() => {
+    if (aiStreamingRef.current) return
+    const key = getStorageKey()
+    try {
+      if (messages.length > 0) {
+        localStorage.setItem(key, JSON.stringify(messages))
+      } else {
+        localStorage.removeItem(key)
+      }
+    } catch {
+      // ignore
+    }
+  }, [messages, getStorageKey])
+
   useEffect(() => {
     const cleanChunk = window.api.onLlmChunk((data) => {
       if (!aiStreamingRef.current) return
@@ -234,7 +283,12 @@ export function useLlmChat({
     setAiError(null)
     setAiInput("")
     setMessages([])
-  }, [])
+    try {
+      localStorage.removeItem(getStorageKey())
+    } catch {
+      // ignore
+    }
+  }, [getStorageKey])
 
   const handleExplainWithAi = useCallback((item: ExplainWithAiItem) => {
     setActiveSideTab('ai')

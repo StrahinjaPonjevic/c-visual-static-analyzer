@@ -18,6 +18,7 @@ import {
   Activity,
   ShieldAlert,
   Download,
+  Workflow,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import type { CppcheckIssue, GccError } from "@/types"
-import { computeMetrics } from "@/analysis/parsers"
+import { computeMetrics, extractCallGraph } from "@/analysis/parsers"
 import { useTranslation } from "@/i18n/LanguageContext"
 
 export interface ExplainWithAiItem {
@@ -91,8 +92,10 @@ export function StaticAnalysisPanel({
 }: StaticAnalysisPanelProps) {
   const { t } = useTranslation()
   const metrics = useMemo(() => computeMetrics(code), [code])
+  const callGraph = useMemo(() => extractCallGraph(code), [code])
 
   const [metricsOpen, setMetricsOpen] = useState(true)
+  const [callGraphOpen, setCallGraphOpen] = useState(true)
   const [issuesOpen, setIssuesOpen] = useState(true)
 
   // Merge Cppcheck issues and GCC errors into a single unified list
@@ -256,30 +259,77 @@ export function StaticAnalysisPanel({
             </CollapsibleContent>
           </Collapsible>
 
+          {/* Call Graph section */}
+          <Collapsible open={callGraphOpen} onOpenChange={setCallGraphOpen}>
+            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
+              {callGraphOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+              <Workflow className="h-3.5 w-3.5 text-cyan-400" />
+              <span>{t("analysis.callGraphTitle")}</span>
+              <span className="ml-auto text-[11px] text-muted-foreground font-normal">
+                ({callGraph.length})
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2">
+              {callGraph.length === 0 ? (
+                <div className="text-xs text-muted-foreground py-3 text-center italic">
+                  {t("analysis.noCalls")}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {callGraph.map((node) => (
+                    <Card key={node.name} className="border shadow-none bg-muted/20 hover:bg-muted/40 transition-colors">
+                      <CardContent className="p-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono font-bold text-cyan-400">
+                            {node.name}()
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {t("statusBar.line")} {node.line}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+                          {node.calls.length > 0 ? (
+                            node.calls.map((callee) => (
+                              <Badge key={callee} variant="secondary" className="text-[10px] px-1.5 py-0 bg-cyan-950/60 text-cyan-300 border border-cyan-800/50">
+                                ➔ {callee}()
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground italic">
+                              ({t("analysis.noCalls")})
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Problemi section */}
           <Collapsible open={issuesOpen} onOpenChange={setIssuesOpen}>
-            <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
-              {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
-              {t("analysis.issuesTitle")}
-              {combinedIssues.length > 0 && (
-                <span className="text-muted-foreground/60 font-normal">
-                  ({t("analysis.summary", { count: combinedIssues.length })})
-                </span>
-              )}
-              <div className="ml-auto" />
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 flex-1">
+                {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+                {t("analysis.issuesTitle")}
+                {combinedIssues.length > 0 && (
+                  <span className="text-muted-foreground/60 font-normal">
+                    ({t("analysis.summary", { count: combinedIssues.length })})
+                  </span>
+                )}
+              </CollapsibleTrigger>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 ml-auto shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRefreshCppcheck()
-                }}
+                className="h-5 w-5 shrink-0"
+                onClick={onRefreshCppcheck}
                 disabled={isAnalyzing}
               >
                 <RefreshCw className={`h-3 w-3 ${isAnalyzing ? "animate-spin" : ""}`} />
               </Button>
-            </CollapsibleTrigger>
+            </div>
             <CollapsibleContent className="pt-2">
               {combinedIssues.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">

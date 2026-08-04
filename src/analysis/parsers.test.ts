@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCppcheckXml, parseGccErrors, computeMetrics, stripCommentsAndStrings } from './parsers'
+import { parseCppcheckXml, parseGccErrors, computeMetrics, stripCommentsAndStrings, extractCallGraph } from './parsers'
 
 describe('parseCppcheckXml', () => {
   it('parses a basic error', () => {
@@ -257,6 +257,35 @@ int main() {
     expect(metrics.mallocCalls).toBe(1)
     expect(metrics.freeCalls).toBe(0)
     expect(metrics.memoryLeakRisk).toBe(true)
+  })
+})
+
+describe('extractCallGraph', () => {
+  it('extracts function call graph nodes and relations correctly', () => {
+    const code = `
+void helper() {
+    printf("helper\\n");
+}
+
+void foo() {
+    helper();
+}
+
+int main() {
+    foo();
+    return 0;
+}
+`
+    const graph = extractCallGraph(code)
+    expect(graph).toHaveLength(3)
+
+    const helperNode = graph.find(n => n.name === 'helper')
+    const fooNode = graph.find(n => n.name === 'foo')
+    const mainNode = graph.find(n => n.name === 'main')
+
+    expect(helperNode?.calls).toEqual([])
+    expect(fooNode?.calls).toEqual(['helper'])
+    expect(mainNode?.calls).toEqual(['foo'])
   })
 })
 

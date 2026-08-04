@@ -200,3 +200,49 @@ export function computeMetrics(rawCode: string): CodeMetrics {
   }
 }
 
+export interface FunctionCallNode {
+  name: string
+  line: number
+  calls: string[]
+}
+
+export function extractCallGraph(rawCode: string): FunctionCallNode[] {
+  const code = stripCommentsAndStrings(rawCode)
+  const nodes: FunctionCallNode[] = []
+
+  const funcDefRegex = /\b(?:void|int|char|float|double|long|short|unsigned|signed|static|extern|const)\s+\*?\s*(\w+)\s*\([^)]*\)\s*\{/g
+  let match: RegExpExecArray | null
+
+  const definedFunctions: { name: string; startLine: number; startIndex: number }[] = []
+  while ((match = funcDefRegex.exec(code)) !== null) {
+    const funcName = match[1]
+    if (funcName === 'if' || funcName === 'while' || funcName === 'for' || funcName === 'switch') continue
+    const startIndex = match.index
+    const startLine = code.slice(0, startIndex).split('\n').length
+    definedFunctions.push({ name: funcName, startLine, startIndex })
+  }
+
+  for (let i = 0; i < definedFunctions.length; i++) {
+    const current = definedFunctions[i]
+    const nextStart = i + 1 < definedFunctions.length ? definedFunctions[i + 1].startIndex : code.length
+    const body = code.slice(current.startIndex, nextStart)
+
+    const calls = new Set<string>()
+    for (const other of definedFunctions) {
+      if (other.name === current.name) continue
+      const callRegex = new RegExp(`\\b${other.name}\\s*\\(`, 'g')
+      if (callRegex.test(body)) {
+        calls.add(other.name)
+      }
+    }
+
+    nodes.push({
+      name: current.name,
+      line: current.startLine,
+      calls: Array.from(calls),
+    })
+  }
+
+  return nodes
+}
+
