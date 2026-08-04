@@ -78,6 +78,23 @@ describe('computeMarkers', () => {
     expect(metricMarkers).toHaveLength(0)
   })
 
+  it('does not produce metric markers for variable names containing malloc or free (e.g. my_malloc)', () => {
+    const code = 'int my_malloc = 5;\nint free_list = 10;'
+    const markers = computeMarkers(code, [], [])
+    const metricMarkers = markers.filter(m => m.source === 'metric')
+    expect(metricMarkers).toHaveLength(0)
+  })
+
+  it('defaults to info severity for unknown cppcheck severities', () => {
+    const issues: CppcheckIssue[] = [
+      // @ts-expect-error testing runtime fallback for unknown severity
+      { id: 'unknown', severity: 'unknown_sev', message: 'test', line: 4, column: 1 },
+    ]
+    const markers = computeMarkers('', issues, [])
+    expect(markers).toHaveLength(1)
+    expect(markers[0].severity).toBe('info')
+  })
+
   it('combines all marker types', () => {
     const issues: CppcheckIssue[] = [
       { id: 'x', severity: 'warning', message: 'cppcheck', line: 1, column: 1 },
@@ -85,7 +102,6 @@ describe('computeMarkers', () => {
     const errors: GccError[] = [
       { line: 2, column: 2, type: 'error', message: 'gcc' },
     ]
-    // malloc without free for metric marker
     const code = 'int *p = malloc(100);'
     const markers = computeMarkers(code, issues, errors)
     const sources = new Set(markers.map(m => m.source))

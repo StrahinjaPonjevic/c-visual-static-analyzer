@@ -3,13 +3,24 @@ import type { CppcheckIssue, GccError } from '@/types'
 export function parseCppcheckXml(xml: string): CppcheckIssue[] {
   const issues: CppcheckIssue[] = []
 
-  const errorRegex = /<error\s+id="([^"]*)"\s+severity="([^"]*)"\s+msg="([^"]*)"(?:[^>]*)>([\s\S]*?)<\/error>/g
+  const errorBlockRegex = /<error\s+([^>]*?)>([\s\S]*?)<\/error>/g
   let match: RegExpExecArray | null
 
-  while ((match = errorRegex.exec(xml)) !== null) {
-    const id = match[1]
-    const severity = match[2] as CppcheckIssue['severity']
-    const message = match[3]
+  while ((match = errorBlockRegex.exec(xml)) !== null) {
+    const attrString = match[1]
+    const innerContent = match[2]
+
+    const idMatch = attrString.match(/\bid="([^"]*)"/)
+    const severityMatch = attrString.match(/\bseverity="([^"]*)"/)
+    const msgMatch = attrString.match(/\bmsg="([^"]*)"/)
+    const cweMatch = attrString.match(/\bcwe="(\d+)"/)
+
+    if (!idMatch || !severityMatch || !msgMatch) continue
+
+    const id = idMatch[1]
+    const severity = severityMatch[1] as CppcheckIssue['severity']
+    const rawMsg = msgMatch[1]
+    const message = rawMsg
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
@@ -18,13 +29,11 @@ export function parseCppcheckXml(xml: string): CppcheckIssue[] {
 
     if (id === 'missingIncludeSystem' || id === 'checkersReport') continue
 
-    const innerContent = match[4]
     const locationMatch = innerContent.match(/<location\s+file="([^"]*)"\s+line="(\d+)"(?:\s+column="(\d+)")?/)
     if (locationMatch) {
       const filePath = locationMatch[1]
       const line = parseInt(locationMatch[2], 10) || 0
       const column = parseInt(locationMatch[3] || '0', 10) || 0
-      const cweMatch = match[0].match(/cwe="(\d+)"/)
       issues.push({
         id,
         severity,
@@ -40,17 +49,18 @@ export function parseCppcheckXml(xml: string): CppcheckIssue[] {
   return issues
 }
 
-const gccErrorRegex = /^((?:[a-zA-Z]:)?[^:]+):(\d+):(\d+):\s+(error|warning):\s+(.+)$/gm
+const gccErrorRegex = /^((?:[a-zA-Z]:)?[^:]+):(\d+):(?:(\d+):)?\s+(error|warning|fatal error):\s+(.+)$/gm
 
 export function parseGccErrors(stderr: string): GccError[] {
   const errors: GccError[] = []
   let match: RegExpExecArray | null
   while ((match = gccErrorRegex.exec(stderr)) !== null) {
+    const rawType = match[4]
     errors.push({
       filePath: match[1],
       line: parseInt(match[2], 10),
-      column: parseInt(match[3], 10),
-      type: match[4] as 'error' | 'warning',
+      column: match[3] ? parseInt(match[3], 10) : 0,
+      type: rawType.includes('error') ? 'error' : 'warning',
       message: match[5],
     })
   }

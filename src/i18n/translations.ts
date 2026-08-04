@@ -135,6 +135,7 @@ export const translations = {
       fileSaved: "Fajl je uspešno sačuvan",
       fileSaveError: "Greška pri čuvanju fajla",
       settingsSaved: "Podešavanja su uspešno sačuvana!",
+      settingsSaveError: "Greška pri čuvanju podešavanja",
       compileFailed: "Kompajliranje neuspešno - postoje greške u kodu",
       compileSuccess: "Kompajliranje uspešno!",
       codeApplied: "Predloženi kod je primenjen u editoru!",
@@ -194,6 +195,7 @@ export const translations = {
       externalChange: {
         title: "Spoljne izmene fajla",
         description: "Fajl \"{{fileName}}\" je izmenjen van aplikacije. Da li želite da osvežite sadržaj?",
+        descriptionDirty: "Fajl \"{{fileName}}\" je izmenjen od strane drugog programa. Imate nesnimljene promene koje će biti izgubljene ako učitate novu verziju. Želite li da učitate novu verziju?",
         reload: "Osveži fajl",
         ignore: "Zanemari",
       },
@@ -340,6 +342,7 @@ export const translations = {
       fileSaved: "File saved successfully",
       fileSaveError: "Error saving file",
       settingsSaved: "Settings saved successfully!",
+      settingsSaveError: "Error saving settings",
       compileFailed: "Compilation failed - code contains errors",
       compileSuccess: "Compilation successful!",
       codeApplied: "Suggested code applied to editor!",
@@ -399,6 +402,7 @@ export const translations = {
       externalChange: {
         title: "External File Changes",
         description: "File \"{{fileName}}\" was modified externally. Would you like to reload its content?",
+        descriptionDirty: "File \"{{fileName}}\" was modified externally. You have unsaved changes that will be lost if you reload. Would you like to reload its content?",
         reload: "Reload File",
         ignore: "Ignore",
       },

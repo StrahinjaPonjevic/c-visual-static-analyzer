@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { Toaster, toast } from "sonner"
-import { LanguageProvider } from "@/i18n/LanguageContext"
+import { LanguageProvider, useTranslation } from "@/i18n/LanguageContext"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   ResizablePanelGroup,
@@ -38,7 +38,13 @@ import { useRunner } from "@/hooks/useRunner"
 
 export type { Message }
 
-function AppMain() {
+interface AppMainProps {
+  settings: AppSettings
+  onSaveSettings: (newSettings: AppSettings) => Promise<void>
+}
+
+function AppMain({ settings, onSaveSettings }: AppMainProps) {
+  const { t } = useTranslation()
   // ---- GCC & Cppcheck detection & Dialog ----
   const [gccDetected, setGccDetected] = useState<boolean | undefined>(undefined)
   const [gccVersion, setGccVersion] = useState<string | undefined>(undefined)
@@ -61,24 +67,8 @@ function AppMain() {
     handleRecheckDependencies()
   }, [handleRecheckDependencies])
 
-  // ---- Settings ----
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  // ---- Settings Dialog ----
   const [settingsOpen, setSettingsOpen] = useState(false)
-
-  useEffect(() => {
-    window.api.getSettings().then(setSettings)
-  }, [])
-
-  const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
-    setSettings(newSettings)
-    const result = await window.api.saveSettings(newSettings)
-    if (!result.success) {
-      console.error("Failed to save settings:", result.error)
-      toast.error(result.error || "Greška pri čuvanju podešavanja")
-    } else {
-      toast.success("Podešavanja su uspešno sačuvana")
-    }
-  }, [])
 
   // ---- Cppcheck State & Callbacks ----
   const [cppcheckIssues, setCppcheckIssues] = useState<CppcheckIssue[]>([])
@@ -414,18 +404,19 @@ function AppMain() {
         <Dialog open={fileManager.externalChangeData !== null} onOpenChange={() => fileManager.setExternalChangeData(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Fajl promenjen spolja</DialogTitle>
+              <DialogTitle>{t("dialogs.externalChange.title")}</DialogTitle>
               <DialogDescription>
-                Fajl "{fileManager.externalChangeData?.fileName}" je promenjen od strane drugog programa.
-                {fileManager.isDirty ? " Imate nesnimljene promene. Želiš li da učitaš novu verziju? (Nesnimljene promene biće izgubljene)" : ""}
+                {fileManager.isDirty
+                  ? t("dialogs.externalChange.descriptionDirty", { fileName: fileManager.externalChangeData?.fileName || "" })
+                  : t("dialogs.externalChange.description", { fileName: fileManager.externalChangeData?.fileName || "" })}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="ghost" onClick={() => fileManager.setExternalChangeData(null)}>
-                Zadrži moju verziju
+                {t("dialogs.externalChange.ignore")}
               </Button>
               <Button onClick={handleReloadExternalWithClearGcc}>
-                Učitaj novu verziju
+                {t("dialogs.externalChange.reload")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -435,12 +426,38 @@ function AppMain() {
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
           settings={settings}
-          onSave={handleSaveSettings}
+          onSave={onSaveSettings}
         />
         <Toaster position="bottom-right" theme="dark" richColors />
       </div>
     </TooltipProvider>
   )
+}
+
+function AppContainer({
+  settings,
+  setSettings,
+}: {
+  settings: AppSettings
+  setSettings: React.Dispatch<React.SetStateAction<AppSettings>>
+}) {
+  const { t } = useTranslation()
+
+  const handleSaveSettings = useCallback(
+    async (newSettings: AppSettings) => {
+      setSettings(newSettings)
+      const result = await window.api.saveSettings(newSettings)
+      if (!result.success) {
+        console.error("Failed to save settings:", result.error)
+        toast.error(result.error || t("toasts.settingsSaveError"))
+      } else {
+        toast.success(t("toasts.settingsSaved"))
+      }
+    },
+    [setSettings, t],
+  )
+
+  return <AppMain settings={settings} onSaveSettings={handleSaveSettings} />
 }
 
 export function App() {
@@ -452,7 +469,7 @@ export function App() {
 
   return (
     <LanguageProvider language={settings.general?.language || 'sr'}>
-      <AppMain />
+      <AppContainer settings={settings} setSettings={setSettings} />
     </LanguageProvider>
   )
 }

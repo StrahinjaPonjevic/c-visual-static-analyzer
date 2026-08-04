@@ -93,6 +93,26 @@ describe('parseCppcheckXml', () => {
     const issues = parseCppcheckXml(xml)
     expect(issues[0].column).toBe(0)
   })
+
+  it('parses error with shuffled attributes order (severity before id)', () => {
+    const xml = `<?xml version="1.0"?>
+<results>
+<error severity="error" cwe="457" id="uninitvar" msg="Uninitialized variable: y">
+  <location file="main.c" line="12" column="4"/>
+</error>
+</results>`
+    const issues = parseCppcheckXml(xml)
+    expect(issues).toHaveLength(1)
+    expect(issues[0]).toMatchObject({
+      id: 'uninitvar',
+      severity: 'error',
+      message: 'Uninitialized variable: y',
+      cwe: 457,
+      line: 12,
+      column: 4,
+      filePath: 'main.c',
+    })
+  })
 })
 
 describe('parseGccErrors', () => {
@@ -113,6 +133,30 @@ describe('parseGccErrors', () => {
     const errors = parseGccErrors(stderr)
     expect(errors).toHaveLength(1)
     expect(errors[0].type).toBe('warning')
+  })
+
+  it('parses GCC fatal error', () => {
+    const stderr = 'test.c:2:1: fatal error: stdio.h: No such file or directory'
+    const errors = parseGccErrors(stderr)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatchObject({
+      line: 2,
+      column: 1,
+      type: 'error',
+      message: 'stdio.h: No such file or directory',
+    })
+  })
+
+  it('parses GCC error without column number', () => {
+    const stderr = 'test.c:15: error: missing semicolon'
+    const errors = parseGccErrors(stderr)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatchObject({
+      line: 15,
+      column: 0,
+      type: 'error',
+      message: 'missing semicolon',
+    })
   })
 
   it('parses multiple errors', () => {

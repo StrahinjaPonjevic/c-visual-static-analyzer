@@ -559,10 +559,20 @@ ipcMain.handle('cppcheck:analyze', async (_event, code: string, originalFilePath
     const xmlOutput = stderr || stdout
     const parsedIssues = parseCppcheckXml(xmlOutput)
     const targetPath = originalFilePath || undefined
-    const issues = parsedIssues.map(issue => ({
-      ...issue,
-      filePath: targetPath || issue.filePath,
-    }))
+    const tempFileName = tempFile ? path.basename(tempFile) : null
+    const issues = parsedIssues.map(issue => {
+      const isTempFile = !issue.filePath ||
+        (tempFile && (
+          issue.filePath === tempFile ||
+          path.normalize(issue.filePath) === path.normalize(tempFile) ||
+          (tempFileName !== null && path.basename(issue.filePath) === tempFileName)
+        ))
+
+      return {
+        ...issue,
+        filePath: isTempFile ? (targetPath || issue.filePath) : issue.filePath,
+      }
+    })
 
     return { issues, success: true }
   } catch (err) {

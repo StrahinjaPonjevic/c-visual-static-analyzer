@@ -9,6 +9,7 @@ function mapCppcheckSeverity(severity: CppcheckIssue['severity']): CodeMarker['s
     case 'performance': return 'warning'
     case 'portability': return 'info'
     case 'information': return 'info'
+    default: return 'info'
   }
 }
 
@@ -17,12 +18,12 @@ function computeMetricMarkers(code: string): CodeMarker[] {
   const stripped = stripCommentsAndStrings(code)
   const strippedLines = stripped.split('\n')
 
-  const hasMalloc = stripped.includes('malloc')
-  const hasFree = stripped.includes('free')
+  const hasMalloc = /\bmalloc\b/.test(stripped)
+  const hasFree = /\bfree\b/.test(stripped)
 
   if (hasMalloc && !hasFree) {
     for (let i = 0; i < strippedLines.length; i++) {
-      if (strippedLines[i].includes('malloc')) {
+      if (/\bmalloc\b/.test(strippedLines[i])) {
         markers.push({
           line: i + 1,
           severity: 'warning',
@@ -35,7 +36,7 @@ function computeMetricMarkers(code: string): CodeMarker[] {
 
   if (hasFree && !hasMalloc) {
     for (let i = 0; i < strippedLines.length; i++) {
-      if (strippedLines[i].includes('free')) {
+      if (/\bfree\b/.test(strippedLines[i])) {
         markers.push({
           line: i + 1,
           severity: 'warning',

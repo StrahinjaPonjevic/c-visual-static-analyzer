@@ -234,7 +234,7 @@ export function useRunner({
       setTerminalOutput((prev) => [...prev, {
         id: terminalIdRef.current++,
         type: "system",
-        text: `Greška: ${error}\n`,
+        text: t("output.unexpectedError", { error }),
       }])
     })
 
