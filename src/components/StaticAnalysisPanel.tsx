@@ -126,7 +126,7 @@ export function StaticAnalysisPanel({
     { icon: Hash, label: t("analysis.linesOfCode"), value: metrics.lines },
     { icon: FunctionSquare, label: t("analysis.functions"), value: metrics.functions },
     { icon: Activity, label: t("analysis.complexity"), value: metrics.cyclomaticComplexity },
-    { icon: ShieldAlert, label: t("analysis.memoryRisk"), value: metrics.memoryLeakRisk ? `⚠️ ${t("common.yes")}` : `✅ ${t("common.no")}` },
+    { icon: ShieldAlert, label: t("analysis.memoryRisk"), value: metrics.memoryLeakRisk ? t("common.yes") : t("common.no") },
     { icon: GitBranch, label: "If/Else", value: metrics.ifStatements },
     { icon: GitBranch, label: "Loops", value: metrics.loops },
     { icon: Braces, label: "Arrays", value: metrics.arrays },
@@ -174,7 +174,7 @@ export function StaticAnalysisPanel({
       <div class="card"><div class="card-value">${metrics.cyclomaticComplexity}</div><div class="card-label">${t("analysis.complexity")}</div></div>
       <div class="card"><div class="card-value">${metrics.mallocCalls} / ${metrics.freeCalls}</div><div class="card-label">malloc / free</div></div>
       <div class="card"><div class="card-value">${metrics.pointers}</div><div class="card-label">Pointers</div></div>
-      <div class="card"><div class="card-value">${metrics.memoryLeakRisk ? `⚠️ ${t("common.yes")}` : `✅ ${t("common.no")}`}</div><div class="card-label">${t("analysis.memoryRisk")}</div></div>
+      <div class="card"><div class="card-value">${metrics.memoryLeakRisk ? t("common.yes") : t("common.no")}</div><div class="card-label">${t("analysis.memoryRisk")}</div></div>
     </div>
   </div>
 

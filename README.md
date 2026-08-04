@@ -11,18 +11,25 @@ c-visual-static-analyzer/
 │   ├── preload.ts            # Preload skript (contextBridge API)
 │   └── settings.ts           # Čuvanje/učitavanje podešavanja
 ├── src/                       # Renderer proces (React)
-│   ├── App.tsx               # Glavna komponenta, state menadžment
+│   ├── App.tsx               # Glavna komponenta
+│   ├── hooks/                # Modularni custom hook-ovi
+│   │   ├── useFileManager.ts # Upravljanje fajlovima, radnim prostorom i tabovima
+│   │   ├── useRunner.ts      # GCC kompilacija, stdin/stdout i pokretanje
+│   │   └── useLlmChat.ts     # AI chat, streaming i predlozi
 │   ├── components/           # UI komponente
-│   │   ├── Editor.tsx        # Monaco editor
+│   │   ├── Editor.tsx        # Monaco editor sa Quick-Fix & Drag&Drop
 │   │   ├── AIPanel.tsx       # AI chat panel
-│   │   ├── SettingsDialog.tsx # Podešavanja
-│   │   ├── StaticAnalysisPanel.tsx # Cppcheck rezultati + metrike
-│   │   ├── OutputPanel.tsx   # Terminal output
-│   │   ├── StatusBar.tsx     # Status bar
-│   │   └── Toolbar.tsx       # Toolbar
+│   │   ├── SettingsDialog.tsx # Podešavanja (jezik, editor, Ollama, Cppcheck)
+│   │   ├── StaticAnalysisPanel.tsx # Cppcheck rezultati + složenost + HTML izvoz
+│   │   ├── OutputPanel.tsx   # Terminal output i interaktivni stdin
+│   │   ├── StatusBar.tsx     # Status bar sa detekcijom alata i jezika
+│   │   └── Toolbar.tsx       # Toolbar sa prečicama
+│   ├── i18n/                 # Lokalizacija (Srpski / English)
+│   │   ├── LanguageContext.tsx
+│   │   └── translations.ts
 │   ├── analysis/
 │   │   ├── markers.ts        # Generisanje markera za editor
-│   │   └── parsers.ts        # Parsiranje GCC i Cppcheck izlaza
+│   │   └── parsers.ts        # Parsiranje GCC/Cppcheck izlaza i ciklomačka složenost
 │   ├── lib/
 │   │   └── utils.ts          # Helper funkcije
 │   └── types/                # TypeScript tipovi
@@ -34,11 +41,12 @@ c-visual-static-analyzer/
 
 | Funkcionalnost | Opis |
 |---------------|------|
-| **Editor** | Monaco editor sa sintaksnim bojenjem, markerima za greške |
-| **GCC compile & run** | Kompajliranje i pokretanje C koda, prikaz grešaka/upozorenja |
-| **Cppcheck analiza** | Statička analiza koda sa vizuelnim označavanjem problema |
-| **AI asistent** | Chat sa LLM modelom (Ollama) za objašnjavanje koda |
-| **Metrike** | Linije koda, funkcije, petlje, pokazivači, komentari... |
+| **Editor** | Monaco editor sa sintaksnim bojenjem, Drag&Drop podrškom, markerima za greške i desnim klikom "Explain with AI" |
+| **GCC compile & run** | Kompajliranje i pokretanje C koda, interaktivni terminal ulaz (stdin) i prikaz izlaza |
+| **Cppcheck analiza** | Statička analiza koda, ciklomačka složenost (Cyclomatic Complexity), detekcija memorijskih curenja i HTML izvoz izveštaja |
+| **AI asistent** | Chat sa LLM modelom (Ollama) sa indikatorom konekcije, mogućnošću davanja instrukcija i dugmetom "Primeni u editoru" |
+| **Lokalizacija (i18n)** | Podrška za Srpski i Engleski jezik u celom UI-ju, notifikacijama i AI promptovima |
+| **Metrike** | Linije koda, funkcije, petlje, pokazivači, komentari i analiza rizika |
 
 ## Tehnologije
 
@@ -74,7 +82,7 @@ ollama serve
 
 Podržani modeli: `gemma4:e4b` (podrazumevani), `llama3.2`, `mistral`, itd.
 
-API ključevi nisu potrebni — Ollama radi lokalno.
+API ključevi nisu potrebni - Ollama radi lokalno.
 
 ## Struktura podataka
 

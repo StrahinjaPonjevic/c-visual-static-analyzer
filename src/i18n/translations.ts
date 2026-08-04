@@ -85,6 +85,13 @@ export const translations = {
       statusConnected: "Lokalni Ollama servis je povezan i spreman",
       statusDisconnected: "Lokalni Ollama servis nije dostupan (pokrenite ollama serve)",
       model: "Model",
+      errorPrefix: "Greška: ",
+      errors: {
+        ollamaNotRunning: "Ollama nije pokrenuta. Pokrenite \"ollama serve\" ili Ollama aplikaciju.",
+        settingsLoadError: "Greška pri učitavanju podešavanja.",
+        invalidUrlError: "Neispravna Ollama URL adresa.",
+        noResponseBody: "Ollama nije vratio telo odgovora.",
+      },
       systemPrompt: "Ti si AI asistent za učenje C programiranja u okviru desktop aplikacije za vizuelnu statičku analizu koda. Pomažeš korisnicima da razumeju strukturu i logiku C koda, pronađu i isprave greške, nauče najbolje prakse u C programiranju i interpretiraju GCC/Cppcheck poruke. Odgovaraj kratko, stručno i jasno, na srpskom jeziku. Koristi kod primere kad je to korisno.",
       explainPrompt: {
         intro: "Molim te da mi objasniš sledeću poruku iz {{source}}:",
@@ -283,6 +290,13 @@ export const translations = {
       statusConnected: "Local Ollama service is connected and ready",
       statusDisconnected: "Local Ollama service is unavailable (start ollama serve)",
       model: "Model",
+      errorPrefix: "Error: ",
+      errors: {
+        ollamaNotRunning: "Ollama is not running. Please run \"ollama serve\" or start the Ollama application.",
+        settingsLoadError: "Error loading settings.",
+        invalidUrlError: "Invalid Ollama URL address.",
+        noResponseBody: "Ollama returned an empty response body.",
+      },
       systemPrompt: "You are an AI assistant for learning C programming within a visual static code analyzer desktop application. You help users understand C code structure and logic, find and fix errors, learn best practices in C programming, and interpret GCC/Cppcheck messages. Answer concisely, professionally, and clearly, in English. Use code examples when helpful.",
       explainPrompt: {
         intro: "Please explain the following message from {{source}}:",
