@@ -226,7 +226,7 @@ export function StaticAnalysisPanel({
           <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
             <div className="flex items-center justify-between">
               <CollapsibleTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 flex-1">
-                {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+                {metricsOpen ? <ChevronDown className="h-3.5 w-3.5 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
                 {t("analysis.metricsTitle")}
               </CollapsibleTrigger>
               <Button
@@ -262,7 +262,7 @@ export function StaticAnalysisPanel({
           {/* Call Graph section */}
           <Collapsible open={callGraphOpen} onOpenChange={setCallGraphOpen}>
             <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
-              {callGraphOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+              {callGraphOpen ? <ChevronDown className="h-3.5 w-3.5 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
               <Workflow className="h-3.5 w-3.5 text-cyan-400" />
               <span>{t("analysis.callGraphTitle")}</span>
               <span className="ml-auto text-[11px] text-muted-foreground font-normal">
@@ -312,7 +312,7 @@ export function StaticAnalysisPanel({
           <Collapsible open={issuesOpen} onOpenChange={setIssuesOpen}>
             <div className="flex items-center justify-between">
               <CollapsibleTrigger className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 flex-1">
-                {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
+                {issuesOpen ? <ChevronDown className="h-3.5 w-3.5 transition-transform" /> : <ChevronRight className="h-3.5 w-3.5 transition-transform" />}
                 {t("analysis.issuesTitle")}
                 {combinedIssues.length > 0 && (
                   <span className="text-muted-foreground/60 font-normal">

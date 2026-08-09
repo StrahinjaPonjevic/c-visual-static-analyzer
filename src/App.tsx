@@ -186,6 +186,22 @@ function AppMain({ settings, onSaveSettings }: AppMainProps) {
     setGccErrors([])
   }, [handleReloadExternal, setGccErrors])
 
+  // ---- F5 global run shortcut ----
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F5') {
+        e.preventDefault()
+        if (runner.isRunning) {
+          runner.handleStop()
+        } else if (!runner.isCompiling) {
+          runner.handleRun()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [runner])
+
   // ---- Analysis results & markers ----
   const markers = useMemo(
     () => computeMarkers(fileManager.code, cppcheckIssues, runner.gccErrors),
@@ -195,13 +211,11 @@ function AppMain({ settings, onSaveSettings }: AppMainProps) {
   const activeMarkers = useMemo(() => {
     const activePath = fileManager.activeFilePath
     if (!activePath) return markers
+    const normA = activePath.replace(/\\/g, '/').toLowerCase()
     return markers.filter((m) => {
       if (!m.filePath) return true
       const normM = m.filePath.replace(/\\/g, '/').toLowerCase()
-      const normA = activePath.replace(/\\/g, '/').toLowerCase()
-      const baseM = normM.split('/').pop()!
-      const baseA = normA.split('/').pop()!
-      return normM === normA || normA.endsWith(normM) || normM.endsWith(normA) || baseM === baseA
+      return normM === normA || normA.endsWith('/' + normM) || normM.endsWith('/' + normA)
     })
   }, [markers, fileManager.activeFilePath])
 

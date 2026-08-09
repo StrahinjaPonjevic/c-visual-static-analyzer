@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCppcheckXml, parseGccErrors, computeMetrics, stripCommentsAndStrings, extractCallGraph } from './parsers'
+import { parseCppcheckXml, parseGccErrors, computeMetrics, stripCommentsAndStrings, extractCallGraph, injectUnbuffer } from './parsers'
 
 describe('parseCppcheckXml', () => {
   it('parses a basic error', () => {
@@ -287,5 +287,71 @@ int main() {
     expect(fooNode?.calls).toEqual(['helper'])
     expect(mainNode?.calls).toEqual(['foo'])
   })
+
+  it('handles functions returning typedefs and structs in call graph', () => {
+    const code = `
+struct Node* create_node() {
+    return NULL;
+}
+
+bool init_system() {
+    create_node();
+    return true;
+}
+
+int main() {
+    init_system();
+    return 0;
+}
+`
+    const graph = extractCallGraph(code)
+    expect(graph).toHaveLength(3)
+
+    const createNode = graph.find(n => n.name === 'create_node')
+    const initSystem = graph.find(n => n.name === 'init_system')
+    const mainNode = graph.find(n => n.name === 'main')
+
+    expect(createNode).toBeDefined()
+    expect(initSystem?.calls).toContain('create_node')
+    expect(mainNode?.calls).toContain('init_system')
+  })
 })
+
+describe('injectUnbuffer', () => {
+  it('injects setvbuf after opening brace of main', () => {
+    const code = `#include <stdio.h>
+int main() {
+    printf("hello");
+    return 0;
+}`
+    const result = injectUnbuffer(code)
+    expect(result).toContain('int main() { setvbuf(stdout, NULL, _IONBF, 0); setvbuf(stderr, NULL, _IONBF, 0);')
+    expect(result).not.toMatch(/^#include <stdio.h>\n#include <stdio.h>/)
+  })
+
+  it('prepends stdio.h if missing', () => {
+    const code = `int main() {
+    return 0;
+}`
+    const result = injectUnbuffer(code)
+    expect(result.startsWith('#include <stdio.h>\n')).toBe(true)
+    expect(result).toContain('setvbuf(stdout, NULL, _IONBF, 0);')
+  })
+
+  it('safely skips commented-out main definitions', () => {
+    const code = `#include <stdio.h>
+// int main() { return 1; }
+/* void main() { printf("old"); } */
+int main(int argc, char **argv) {
+    printf("real main");
+    return 0;
+}`
+    const result = injectUnbuffer(code)
+    // Ensure setvbuf is NOT inserted in the single-line comment
+    expect(result).toContain('// int main() { return 1; }\n')
+    // Ensure setvbuf IS inserted inside the real main
+    expect(result).toContain('int main(int argc, char **argv) { setvbuf(stdout, NULL, _IONBF, 0); setvbuf(stderr, NULL, _IONBF, 0);')
+  })
+})
+
 

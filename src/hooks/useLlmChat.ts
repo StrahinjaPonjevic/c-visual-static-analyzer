@@ -63,6 +63,9 @@ export function useLlmChat({
 
   const getStorageKey = useCallback(() => {
     if (activeFilePathRef.current) {
+      if (activeFilePathRef.current.startsWith('untitled_')) {
+        return 'chat_history_untitled_session'
+      }
       return `chat_history_${activeFilePathRef.current}`
     }
     if (modeRef.current === 'project' && projectPathRef.current) {

@@ -161,7 +161,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             <Collapsible open={sections.general} onOpenChange={() => toggleSection("general")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
                 {sections.general ? (
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
@@ -188,7 +188,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             <Collapsible open={sections.llm} onOpenChange={() => toggleSection("llm")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
                 {sections.llm ? (
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
@@ -228,7 +228,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             <Collapsible open={sections.compiler} onOpenChange={() => toggleSection("compiler")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
                 {sections.compiler ? (
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
@@ -269,7 +269,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             <Collapsible open={sections.cppcheck} onOpenChange={() => toggleSection("cppcheck")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
                 {sections.cppcheck ? (
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}
@@ -332,7 +332,7 @@ export function SettingsDialog({ open, onClose, settings, onSave }: SettingsDial
             <Collapsible open={sections.editor} onOpenChange={() => toggleSection("editor")}>
               <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50">
                 {sections.editor ? (
-                  <ChevronDown className="h-3.5 w-3.5 -rotate-90 transition-transform" />
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform" />
                 ) : (
                   <ChevronRight className="h-3.5 w-3.5 transition-transform" />
                 )}

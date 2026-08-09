@@ -15,6 +15,13 @@ export default defineConfig({
     ...(process.env.VITEST ? [] : [electron({
       main: {
         entry: 'electron/main.ts',
+        vite: {
+          resolve: {
+            alias: {
+              "@": path.resolve(__dirname, "./src"),
+            },
+          },
+        },
       },
       preload: {
         input: path.join(__dirname, 'electron/preload.ts'),

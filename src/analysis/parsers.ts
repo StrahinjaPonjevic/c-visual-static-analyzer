@@ -1,4 +1,7 @@
-import type { CppcheckIssue, GccError } from '@/types'
+import type { CppcheckIssue, GccError } from '../types'
+import { stripCommentsAndStrings } from '../lib/utils'
+
+export { stripCommentsAndStrings }
 
 export function parseCppcheckXml(xml: string): CppcheckIssue[] {
   const issues: CppcheckIssue[] = []
@@ -67,15 +70,78 @@ export function parseGccErrors(stderr: string): GccError[] {
   return errors
 }
 
+export function stripCommentsPreserveIndices(code: string): string {
+  let result = ''
+  let i = 0
+  while (i < code.length) {
+    if (code[i] === '/' && code[i + 1] === '/') {
+      result += '  '
+      i += 2
+      while (i < code.length && code[i] !== '\n') {
+        result += ' '
+        i++
+      }
+    } else if (code[i] === '/' && code[i + 1] === '*') {
+      result += '  '
+      i += 2
+      while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
+        result += code[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < code.length) {
+        result += '  '
+        i += 2
+      }
+    } else if (code[i] === '"') {
+      result += '"'
+      i++
+      while (i < code.length && code[i] !== '"') {
+        if (code[i] === '\\' && i + 1 < code.length) {
+          result += '  '
+          i += 2
+          continue
+        }
+        result += code[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < code.length) {
+        result += '"'
+        i++
+      }
+    } else if (code[i] === "'") {
+      result += "'"
+      i++
+      while (i < code.length && code[i] !== "'") {
+        if (code[i] === '\\' && i + 1 < code.length) {
+          result += '  '
+          i += 2
+          continue
+        }
+        result += code[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < code.length) {
+        result += "'"
+        i++
+      }
+    } else {
+      result += code[i]
+      i++
+    }
+  }
+  return result
+}
+
 export function injectUnbuffer(code: string): string {
   const hasStdioH = /#include\s*<stdio\.h>/.test(code)
   const preamble = hasStdioH ? '' : '#include <stdio.h>\n'
 
-  const mainRegex = /(int\s+)?main\s*\([\s\S]*?\)\s*\{/
-  const match = code.match(mainRegex)
-  if (!match) return preamble + code
+  const stripped = stripCommentsPreserveIndices(code)
+  const mainRegex = /\b(?:int|void)\s+main\s*\([\s\S]*?\)\s*\{/
+  const match = stripped.match(mainRegex)
+  if (!match || match.index === undefined) return preamble + code
 
-  const braceIndex = match.index! + match[0].length
+  const braceIndex = match.index + match[0].length
   const before = code.slice(0, braceIndex)
   const after = code.slice(braceIndex)
   return preamble + before + ' setvbuf(stdout, NULL, _IONBF, 0); setvbuf(stderr, NULL, _IONBF, 0);' + after
@@ -98,43 +164,7 @@ export interface CodeMetrics {
   memoryLeakRisk: boolean
 }
 
-export function stripCommentsAndStrings(code: string): string {
-  let result = ''
-  let i = 0
-  while (i < code.length) {
-    if (code[i] === '/' && code[i + 1] === '/') {
-      while (i < code.length && code[i] !== '\n') i++
-    } else if (code[i] === '/' && code[i + 1] === '*') {
-      result += ' '
-      i += 2
-      while (i < code.length && !(code[i] === '*' && code[i + 1] === '/')) {
-        if (code[i] === '\n') result += '\n'
-        i++
-      }
-      if (i < code.length) i += 2
-    } else if (code[i] === '"') {
-      result += ' '
-      i++
-      while (i < code.length && code[i] !== '"') {
-        if (code[i] === '\\') i++
-        i++
-      }
-      i++
-    } else if (code[i] === "'") {
-      result += ' '
-      i++
-      while (i < code.length && code[i] !== "'") {
-        if (code[i] === '\\') i++
-        i++
-      }
-      i++
-    } else {
-      result += code[i]
-      i++
-    }
-  }
-  return result
-}
+const FUNCTION_DEF_REGEX = /\b(?:(?:static|inline|extern|const|volatile)\s+)*(?:void|int|char|float|double|long|short|unsigned|signed|bool|size_t|ssize_t|int8_t|int16_t|int32_t|int64_t|uint8_t|uint16_t|uint32_t|uint64_t|uintptr_t|intptr_t|FILE|struct\s+\w+|union\s+\w+|enum\s+\w+|[a-zA-Z_]\w*_t|[A-Z]\w*)(?:\s*\*+|\s+)\s*\*?\s*([a-zA-Z_]\w*)\s*\([^)]*\)\s*\{/g
 
 export function computeMetrics(rawCode: string): CodeMetrics {
   const code = stripCommentsAndStrings(rawCode)
@@ -142,11 +172,14 @@ export function computeMetrics(rawCode: string): CodeMetrics {
   const totalLines = lines.length
   const nonEmptyLines = lines.filter((l) => l.trim().length > 0).length
 
-  const functionCount = (
-    code.match(
-      /\b(void|int|char|float|double|long|short|unsigned|signed|static|extern|const)\s+\*?\s*\w+\s*\([^)]*\)\s*\{/g
-    ) || []
-  ).length
+  let functionCount = 0
+  let funcMatch: RegExpExecArray | null
+  const funcRegex = new RegExp(FUNCTION_DEF_REGEX)
+  while ((funcMatch = funcRegex.exec(code)) !== null) {
+    const name = funcMatch[1]
+    if (name === 'if' || name === 'while' || name === 'for' || name === 'switch') continue
+    functionCount++
+  }
 
   const elseIfCount = (code.match(/\belse\s+if\s*\(/g) || []).length
   const ifCount = (code.match(/\bif\s*\(/g) || []).length - elseIfCount
@@ -156,7 +189,7 @@ export function computeMetrics(rawCode: string): CodeMetrics {
   const doCount = (code.match(/\bdo\s*\{/g) || []).length
   const loops = forCount + whileCount + doCount
 
-  const pointerMatches = code.match(/\b\w+\s*\*\s*\w+(\s*=|\s*;|\s*,|\s*\))/g) || []
+  const pointerMatches = code.match(/\b\w+\s*\*+\s*\w+(\s*=|\s*;|\s*,|\s*\))/g) || []
   const pointers = pointerMatches.length
 
   const arrayMatches = code.match(/\w+\s*\[\s*\d*\s*\]/g) || []
@@ -210,7 +243,7 @@ export function extractCallGraph(rawCode: string): FunctionCallNode[] {
   const code = stripCommentsAndStrings(rawCode)
   const nodes: FunctionCallNode[] = []
 
-  const funcDefRegex = /\b(?:void|int|char|float|double|long|short|unsigned|signed|static|extern|const)\s+\*?\s*(\w+)\s*\([^)]*\)\s*\{/g
+  const funcDefRegex = new RegExp(FUNCTION_DEF_REGEX)
   let match: RegExpExecArray | null
 
   const definedFunctions: { name: string; startLine: number; startIndex: number }[] = []

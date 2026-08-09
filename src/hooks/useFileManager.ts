@@ -26,9 +26,14 @@ export function useFileManager({ runCppcheckProject, runCppcheckSingle }: UseFil
   const [showExplorer, setShowExplorer] = useState(false)
 
   const [openFilePaths, setOpenFilePaths] = useState<string[]>([])
+  const openFilePathsRef = useRef(openFilePaths)
+  openFilePathsRef.current = openFilePaths
+
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null)
   const activeFilePathRef = useRef(activeFilePath)
   activeFilePathRef.current = activeFilePath
+
+  const fileSelectSeqRef = useRef(0)
 
   const [fileContents, setFileContents] = useState<Record<string, { content: string; savedContent: string }>>({})
   const fileContentsRef = useRef(fileContents)
@@ -122,12 +127,14 @@ export function useFileManager({ runCppcheckProject, runCppcheckSingle }: UseFil
   }, [handleCodeChange, handleUndo, t])
 
   const handleSelectFile = useCallback(async (filePath: string) => {
-    if (!openFilePaths.includes(filePath)) {
-      setOpenFilePaths((prev) => [...prev, filePath])
-    }
+    const currentSeq = ++fileSelectSeqRef.current
+
+    setOpenFilePaths((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]))
+    setActiveFilePath(filePath)
 
     if (!fileContentsRef.current[filePath]) {
       const res = await window.api.readFile(filePath)
+      if (fileSelectSeqRef.current !== currentSeq) return
       if (res) {
         setFileContents((prev) => ({
           ...prev,
@@ -138,29 +145,28 @@ export function useFileManager({ runCppcheckProject, runCppcheckSingle }: UseFil
     } else {
       setCode(fileContentsRef.current[filePath].content)
     }
-
-    setActiveFilePath(filePath)
-  }, [openFilePaths])
+  }, [])
 
   const forceCloseTab = useCallback((filePath: string) => {
-    setOpenFilePaths((prev) => {
-      const next = prev.filter((p) => p !== filePath)
-      if (activeFilePathRef.current === filePath) {
-        const nextActive = next[next.length - 1] || null
-        setActiveFilePath(nextActive)
-        if (nextActive && fileContentsRef.current[nextActive]) {
-          setCode(fileContentsRef.current[nextActive].content)
-        } else if (!nextActive) {
-          setCode("// Prazan editor\n")
-        }
-      }
-      return next
-    })
+    const currentOpen = openFilePathsRef.current
+    const nextOpen = currentOpen.filter((p) => p !== filePath)
+    setOpenFilePaths(nextOpen)
+
     setFileContents((prev) => {
       const updated = { ...prev }
       delete updated[filePath]
       return updated
     })
+
+    if (activeFilePathRef.current === filePath) {
+      const nextActive = nextOpen[nextOpen.length - 1] || null
+      setActiveFilePath(nextActive)
+      if (nextActive && fileContentsRef.current[nextActive]) {
+        setCode(fileContentsRef.current[nextActive].content)
+      } else if (!nextActive) {
+        setCode("// Prazan editor\n")
+      }
+    }
   }, [])
 
   const handleRefreshTree = useCallback(async () => {
@@ -408,6 +414,16 @@ export function useFileManager({ runCppcheckProject, runCppcheckSingle }: UseFil
         resolve: async (action) => {
           if (action === 'save') {
             await handleSave()
+            for (const [fPath, fState] of Object.entries(fileContentsRef.current)) {
+              if (fState.content !== fState.savedContent && fPath !== activeFilePathRef.current) {
+                const isUntitled = fPath.startsWith('untitled_') ||
+                  fPath.includes('/tmp/') || fPath.includes('\\Temp\\') ||
+                  (!fPath.includes('/') && !fPath.includes('\\'))
+                if (!isUntitled) {
+                  await window.api.saveFile(fPath, fState.content)
+                }
+              }
+            }
           }
           if (action !== 'cancel') {
             window.api.forceClose()

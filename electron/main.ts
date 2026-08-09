@@ -20,16 +20,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Validate path is safe (prevents path traversal attacks)
 function isPathSafe(filePath: string): boolean {
+  if (!filePath || typeof filePath !== 'string') return false
   try {
+    if (filePath.includes('\0')) return false
+    const parts = filePath.split(/[/\\]/)
+    if (parts.includes('..')) return false
     const normalized = path.resolve(filePath)
-    // Block path traversal - if normalized differs, path had .. or similar
-    if (normalized !== path.normalize(filePath)) {
-      return false
-    }
-    // Ensure it's an absolute path
-    if (!path.isAbsolute(normalized)) {
-      return false
-    }
+    if (!path.isAbsolute(normalized)) return false
     return true
   } catch {
     return false
@@ -373,12 +370,34 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string, activeF
     return { success: false, error: 'Nije pronađen nijedan .c fajl u projektu.' }
   }
 
-  const targetCFiles = [targetMainFile, ...helperCFiles.filter(f => path.normalize(f) !== path.normalize(targetMainFile!))]
-
   const tempDir = os.tmpdir()
   const timestamp = Date.now()
   const exePath = path.join(tempDir, process.platform === 'win32' ? `project_${timestamp}.exe` : `project_${timestamp}`)
   tempFiles.add(exePath)
+
+  let tempMainCFile: string | null = null
+  let compileMainFile = targetMainFile
+
+  try {
+    const mainContent = await fs.readFile(targetMainFile, 'utf-8')
+    const injectedMain = injectUnbuffer(mainContent)
+    tempMainCFile = path.join(path.dirname(targetMainFile), `.temp_gcc_main_${timestamp}.c`)
+    try {
+      await fs.writeFile(tempMainCFile, injectedMain, 'utf-8')
+      tempFiles.add(tempMainCFile)
+      compileMainFile = tempMainCFile
+    } catch {
+      tempMainCFile = path.join(tempDir, `project_main_${timestamp}.c`)
+      await fs.writeFile(tempMainCFile, injectedMain, 'utf-8')
+      tempFiles.add(tempMainCFile)
+      compileMainFile = tempMainCFile
+    }
+  } catch {
+    compileMainFile = targetMainFile
+  }
+
+  const otherCFiles = helperCFiles.filter(f => path.normalize(f) !== path.normalize(targetMainFile!))
+  const targetCFiles = [compileMainFile, ...otherCFiles]
 
   let settings: AppSettings
   try {
@@ -407,7 +426,12 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string, activeF
     })
 
     const stderr = result.stderr || ''
-    const warnings = parseGccErrors(stderr)
+    const warnings = parseGccErrors(stderr).map(err => {
+      if (tempMainCFile && err.filePath && path.normalize(err.filePath) === path.normalize(tempMainCFile)) {
+        return { ...err, filePath: targetMainFile! }
+      }
+      return err
+    })
 
     return {
       success: true,
@@ -428,7 +452,12 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string, activeF
     }
     const stderr = execErr.stderr || ''
     const stdout = execErr.stdout || ''
-    const errors = parseGccErrors(stderr)
+    const errors = parseGccErrors(stderr).map(e => {
+      if (tempMainCFile && e.filePath && path.normalize(e.filePath) === path.normalize(tempMainCFile)) {
+        return { ...e, filePath: targetMainFile! }
+      }
+      return e
+    })
     const hasError = typeof execErr.code === 'number' || errors.some(e => e.type === 'error')
 
     return {
@@ -438,6 +467,11 @@ ipcMain.handle('gcc:compile-project', async (_event, projectDir: string, activeF
       stderr,
       exePath: hasError ? undefined : exePath,
       cwd: hasError ? undefined : projectDir,
+    }
+  } finally {
+    if (tempMainCFile) {
+      tempFiles.delete(tempMainCFile)
+      try { await fs.unlink(tempMainCFile) } catch { /* ignore */ }
     }
   }
 })
@@ -846,12 +880,29 @@ let runningExePath: string | null = null
 
 async function cleanupExe(exePath: string | null) {
   if (!exePath) return
-  tempFiles.delete(exePath)
   try {
     await fs.unlink(exePath)
+    tempFiles.delete(exePath)
   } catch {
-    // ignore — file may already be deleted or locked on Windows
+    // If locked (e.g. on Windows), keep it in tempFiles so exit handler cleans it up
   }
+}
+
+function killActiveProcess(proc: import('node:child_process').ChildProcess | null): Promise<void> {
+  if (!proc || !proc.pid) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'])
+      killer.on('close', () => resolve())
+      killer.on('error', () => {
+        try { proc.kill('SIGKILL') } catch { /* ignore */ }
+        resolve()
+      })
+    } else {
+      try { proc.kill('SIGTERM') } catch { /* ignore */ }
+      resolve()
+    }
+  })
 }
 
 ipcMain.handle('program:run', async (_event, exePath: string, workingDirOrFilePath?: string) => {
@@ -936,15 +987,12 @@ ipcMain.handle('program:kill', async () => {
   if (!runningProcess) {
     return { success: false, error: 'Nema aktivnog procesa' }
   }
-  if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
-  } else {
-    runningProcess.kill('SIGTERM')
-  }
+  const proc = runningProcess
   const exeToClean = runningExePath
   runningProcess = null
   runningExePath = null
-  cleanupExe(exeToClean)
+  await killActiveProcess(proc)
+  await cleanupExe(exeToClean)
   return { success: true }
 })
 
@@ -1151,17 +1199,14 @@ ipcMain.handle('llm:check', async (): Promise<{ connected: boolean }> => {
   }
 })
 
-function cleanupRunningProcess() {
+async function cleanupRunningProcess() {
   if (!runningProcess) return
-  if (process.platform === 'win32' && runningProcess.pid) {
-    spawn('taskkill', ['/pid', String(runningProcess.pid), '/f', '/t'])
-  } else {
-    runningProcess.kill('SIGTERM')
-  }
+  const proc = runningProcess
   const exeToClean = runningExePath
   runningProcess = null
   runningExePath = null
-  cleanupExe(exeToClean)
+  await killActiveProcess(proc)
+  await cleanupExe(exeToClean)
 }
 
 ipcMain.on('window:minimize', () => {
